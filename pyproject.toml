@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "agentic-ai"
+version = "0.1.0"
+description = ""
+authors = ["Kevin Liu <kevinxo328@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+fastapi = {extras = ["standard"], version = "^0.116.0"}
+langgraph = "^0.5.1"
+langchain = "^0.3.26"
+langchain-google-genai = "^2.1.6"
+python-dotenv = "^1.1.1"
+langchain-community = "^0.3.27"
+pypdf = "^5.7.0"
+python-multipart = "^0.0.20"
+tenacity = "^9.1.2"
+alembic = "^1.16.3"
+psycopg = {extras = ["binary"], version = "^3.2.9"}
+greenlet = "^3.2.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
