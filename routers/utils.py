@@ -1,10 +1,11 @@
 from io import BytesIO
 
 from fastapi import APIRouter, UploadFile, status
+from langchain_core.documents import Document
 
 import schemas.utils
 import settings
-from utils.doc_processor import markitdown_converter
+import utils.doc_processor as doc_processor
 
 router = APIRouter(
     prefix="/utils",
@@ -25,7 +26,7 @@ async def convert_markdown_by_path(path: str):
     Args:
         path: Path to the file or URL to fetch the markdown content. For local files, use absolute or relative paths.
     """
-    return markitdown_converter(source=path)
+    return doc_processor.markitdown_converter(source=path)
 
 
 @router.post(
@@ -40,4 +41,21 @@ async def convert_markdown_by_file(file: UploadFile):
 
     content = await file.read()
     bio = BytesIO(content)
-    return markitdown_converter(source=bio)
+    return doc_processor.markitdown_converter(source=bio)
+
+
+@router.post(
+    "/splitter/markdown", status_code=status.HTTP_200_OK, response_model=list[Document]
+)
+async def split_markdown(markdown: str, chunk_size: int = 300, chunk_overlap: int = 50):
+    """
+    Split markdown text into chunks.
+
+    Args:
+        markdown: The markdown text to split.
+        chunk_size: The size of each chunk.
+        chunk_overlap: The overlap between chunks.
+    """
+    return doc_processor.split_markdown(
+        markdown=markdown, chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    )
