@@ -7,9 +7,13 @@ load_dotenv()
 
 # LLM Provider Keys
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+if not GOOGLE_API_KEY:
+    raise ValueError("GOOGLE_API_KEY must be set in the environment variables")
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL must be set in the environment variables")
 
 #  App Configuration
 ALLOWED_ENVIRONMENTS = {"development", "staging", "production"}
