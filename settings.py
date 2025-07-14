@@ -2,6 +2,9 @@ import os
 
 from dotenv import load_dotenv
 
+from utils.embeddings import GoogleEmbeddingModel
+from utils.vector_store import CollectionVectorStore
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -15,6 +18,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL must be set in the environment variables")
 
+# Embedding Model Configuration
+DEFAULT_EMBEDDING_MODEL = GoogleEmbeddingModel.EMBEDDING_004.value["name"]
+
 #  App Configuration
 ALLOWED_ENVIRONMENTS = {"development", "staging", "production"}
 APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "development")
@@ -24,3 +30,5 @@ if APP_ENVIRONMENT not in ALLOWED_ENVIRONMENTS:
     )
 
 PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+VectorStore = CollectionVectorStore()

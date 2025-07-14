@@ -20,18 +20,19 @@ class GoogleEmbeddingModel(enum.Enum):
         "output": 768,
     }
     EMBEDDING_004 = {
-        "name": "models/embedding-004",
+        "name": "models/text-embedding-004",
         "input": 2048,
         "output": 768,
     }
 
 
 def get_google_embeddings(
-    model: str = GoogleEmbeddingModel.EMBEDDING_004.name,
+    model: str = GoogleEmbeddingModel.EMBEDDING_004.value["name"],
 ) -> GoogleGenerativeAIEmbeddings:
-    if model not in [m.name for m in GoogleEmbeddingModel]:
+    # Check model should be one of the GoogleEmbeddingModel enum's name
+    if model not in [m.value["name"] for m in GoogleEmbeddingModel]:
         raise ValueError(
-            f"Invalid model name: {model}. Must be one of {[m.name for m in GoogleEmbeddingModel]}."
+            f"Model must be one of {[m.value['name'] for m in GoogleEmbeddingModel]}, got '{model}'"
         )
 
     return GoogleGenerativeAIEmbeddings(model=model)

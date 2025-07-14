@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -8,6 +8,8 @@ import settings
 from database.models.collection import Collection
 from database.models.file import File
 from database.session import get_db_session
+from utils.doc_processor import markitdown_converter, split_markdown
+from utils.embeddings import get_google_embeddings
 from utils.file_uploader import delete_file, save_file, validate_upload_file
 
 router = APIRouter(
@@ -100,7 +102,6 @@ async def upload_file_to_collection(
 
     try:
         save_file_path = save_file(validated_file)
-
         new_file = File(
             filename=validated_file.filename,
             filesize=validated_file.size,
@@ -110,6 +111,32 @@ async def upload_file_to_collection(
         )
 
         session.add(new_file)
+        await session.flush()  # Ensure the file is added to the session
+
+        # Convert the file to markdown and split it into chunks
+        convert_result = markitdown_converter(source=save_file_path)
+        docs = split_markdown(markdown=convert_result.markdown)
+        VectorModel = await settings.VectorStore.get_collection_vector_model(
+            session, collection_id
+        )
+        embedding_model = get_google_embeddings(collection.embedding_model)
+
+        for doc in docs:
+            embedding = embedding_model.embed_query(doc.page_content)
+            vector_row = VectorModel(
+                text=doc.page_content,
+                embedding=embedding,
+                metadata={
+                    **doc.metadata,
+                    "path": save_file_path,
+                    "filename": validated_file.filename,
+                    "content_type": validated_file.content_type,
+                    "size": validated_file.size,
+                    "file_id": str(new_file.id),
+                },
+            )
+            session.add(vector_row)
+
         await session.commit()
         await session.refresh(new_file)
 
@@ -140,6 +167,16 @@ async def delete_file_by_id(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="File not found",
         )
+
+    # Delete the vector row associated with the file
+    VectorModel = await settings.VectorStore.get_collection_vector_model(
+        session, collection_id=str(file.collection_id)
+    )
+    if VectorModel:
+        smst = delete(VectorModel).where(
+            VectorModel.metadata["file_id"].astext == str(file.id)  # type: ignore
+        )
+        await session.execute(smst)
 
     # Delete the file
     delete_file(file.path)

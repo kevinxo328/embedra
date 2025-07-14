@@ -32,6 +32,11 @@ class Collection(Base):
     description: Mapped[str] = mapped_column(
         String(255), nullable=True, comment="description of the collection"
     )
+    embedding_model: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        comment="embedding model used for the collection",
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

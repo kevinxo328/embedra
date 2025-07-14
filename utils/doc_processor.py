@@ -52,7 +52,9 @@ def markitdown_converter(**kwargs):
     return md.convert(**kwargs)
 
 
-def split_markdown(markdown: str, **kwargs):
+def split_markdown(
+    markdown: str, chunk_size: int = 300, chunk_overlap: int = 50, **kwargs
+):
     """
     Split Markdown text into chunks using LangChain's MarkdownTextSplitter.
 
@@ -77,5 +79,7 @@ def split_markdown(markdown: str, **kwargs):
         - Custom splitting strategies for different document types
         - Integration with document metadata for better context preservation
     """
-    splitter = MarkdownTextSplitter(**kwargs)
+    splitter = MarkdownTextSplitter(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap, **kwargs
+    )
     return splitter.create_documents([markdown])
