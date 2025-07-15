@@ -1,11 +1,11 @@
-import enum
+from enum import Enum
 
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 import settings
 
 
-class GoogleEmbeddingModel(enum.Enum):
+class GoogleEmbeddingModel(Enum):
     """
     Enum for Google Embedding Models.
     Each model has a name, input dimension, and output dimension.
@@ -14,25 +14,54 @@ class GoogleEmbeddingModel(enum.Enum):
     - https://ai.google.dev/gemini-api/docs/models#gemini-embedding
     """
 
-    EMBEDDING_001 = {
-        "name": "models/embedding-001",
-        "input": 2048,
-        "output": 768,
-    }
-    EMBEDDING_004 = {
-        "name": "models/text-embedding-004",
-        "input": 2048,
-        "output": 768,
-    }
+    EMBEDDING_001 = "models/embedding-001", 2048, 768
+    EMBEDDING_004 = (
+        "models/text-embedding-004",
+        2048,
+        768,
+    )
+
+    def __init__(self, name: str, input_dim: int, output_dim: int):
+        self._name = name
+        self._input_dim = input_dim
+        self._output_dim = output_dim
+
+    @property
+    def name(self) -> str:
+        """Return the model name."""
+        return self._name
+
+    @property
+    def input_dim(self) -> int:
+        """Return the input dimension of the model."""
+        return self._input_dim
+
+    @property
+    def output_dim(self) -> int:
+        """Return the output dimension of the model."""
+        return self._output_dim
+
+    @classmethod
+    def from_name(cls, name: str):
+        """
+        Get the embedding model by its name.
+        """
+
+        for model in cls:
+            if model.name == name:
+                return model
+        raise ValueError(f"Model {name} not found in GoogleEmbeddingModel enum.")
 
 
 def get_google_embeddings(
-    model: str = GoogleEmbeddingModel.EMBEDDING_004.value["name"],
+    model_name: str = GoogleEmbeddingModel.EMBEDDING_004.name,
 ) -> GoogleGenerativeAIEmbeddings:
     # Check model should be one of the GoogleEmbeddingModel enum's name
-    if model not in [m.value["name"] for m in GoogleEmbeddingModel]:
+    try:
+        GoogleEmbeddingModel.from_name(model_name)
+    except ValueError:
         raise ValueError(
-            f"Model must be one of {[m.value['name'] for m in GoogleEmbeddingModel]}, got '{model}'"
+            f"Invalid embedding model '{model_name}'. Must be one of {[m.name for m in GoogleEmbeddingModel]}"
         )
 
-    return GoogleGenerativeAIEmbeddings(model=model)
+    return GoogleGenerativeAIEmbeddings(model=model_name)

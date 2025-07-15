@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -19,6 +20,6 @@ class Collection(CollectionCreate):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
+    id: Union[UUID, str]
     created_at: datetime
     updated_at: datetime

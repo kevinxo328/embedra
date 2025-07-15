@@ -2,7 +2,7 @@ from collections import OrderedDict
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, String, Table, inspect
+from sqlalchemy import Column, String, Table, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import registry
@@ -143,55 +143,29 @@ class PostgresVectorStore:
         """
         Drop the vector table with the specified name.
         """
+        import re
+
+        # Validate table name to prevent injection (only allow alphanumeric and underscore)
+        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+
+        # Remove from cache first
         cached = self._model_cache.get(table_name)
         if cached:
             self._model_cache.drop(table_name)
 
         def sync_drop_table(sync_conn):
+            # Check if table exists before trying to drop
             if sync_conn.dialect.has_table(sync_conn, table_name):
-                self._metadata.tables[table_name].drop(bind=sync_conn)
+                # Check if table is in metadata
+                if table_name in self._metadata.tables:
+                    # Use metadata to drop table
+                    self._metadata.tables[table_name].drop(bind=sync_conn)
+                else:
+                    # Table name is already validated above
+                    sync_conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
 
         conn = await session.connection()
         await conn.run_sync(sync_drop_table)
 
         return True
-
-
-class CollectionVectorStore(PostgresVectorStore):
-    """
-    A specialized vector store for collections, inheriting from PostgresVectorStore.
-    This class can be extended with additional methods specific to collection management.
-    """
-
-    def __get_table_name(self, collection_id: str):
-        """
-        Generate a table name based on the collection ID.
-        """
-        return f"collection_{collection_id}"
-
-    async def create_collection_vector_table(
-        self, session: AsyncSession, collection_id: str, dimension: int
-    ):
-        """
-        Create a vector table for a specific collection.
-        """
-        table_name = self.__get_table_name(collection_id)
-        return await self.create_vector_table(session, table_name, dimension)
-
-    async def get_collection_vector_model(
-        self, session: AsyncSession, collection_id: str
-    ):
-        """
-        Get the vector model for a specific collection.
-        """
-        table_name = self.__get_table_name(collection_id)
-        return await self.get_vector_model(session, table_name)
-
-    async def drop_collection_vector_table(
-        self, session: AsyncSession, collection_id: str
-    ):
-        """
-        Drop the vector table for a specific collection.
-        """
-        table_name = self.__get_table_name(collection_id)
-        return await self.drop_vector_table(session, table_name)

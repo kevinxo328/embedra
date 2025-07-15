@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 from utils.embeddings import GoogleEmbeddingModel
-from utils.vector_store import CollectionVectorStore
+from utils.vector_store import PostgresVectorStore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -19,7 +19,7 @@ if not DATABASE_URL:
     raise ValueError("DATABASE_URL must be set in the environment variables")
 
 # Embedding Model Configuration
-DEFAULT_EMBEDDING_MODEL = GoogleEmbeddingModel.EMBEDDING_004.value["name"]
+DEFAULT_EMBEDDING_MODEL = GoogleEmbeddingModel.EMBEDDING_004.name
 
 #  App Configuration
 ALLOWED_ENVIRONMENTS = {"development", "staging", "production"}
@@ -31,4 +31,4 @@ if APP_ENVIRONMENT not in ALLOWED_ENVIRONMENTS:
 
 PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VectorStore = CollectionVectorStore()
+VectorStore = PostgresVectorStore()

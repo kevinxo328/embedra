@@ -1,14 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 import schemas.collection
-from database.models.collection import Collection
 from database.session import get_db_session
-from settings import VectorStore
-from utils.embeddings import GoogleEmbeddingModel
-from utils.file_uploader import delete_file
+from services.collection import CollectionService
 
 router = APIRouter(
     prefix="/collections",
@@ -26,19 +21,7 @@ async def get_collections(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Retrieve all collections from the database."""
-
-    stmt = (
-        select(Collection)
-        .options(selectinload(Collection.files))
-        .order_by(Collection.created_at.desc())
-    )
-    result = await session.execute(stmt)
-    collections = result.scalars().all()
-
-    return [
-        schemas.collection.Collection.model_validate(collection)
-        for collection in collections
-    ]
+    return await CollectionService.get_collections(session)
 
 
 @router.get(
@@ -46,27 +29,20 @@ async def get_collections(
     status_code=status.HTTP_200_OK,
     response_model=schemas.collection.Collection,
 )
-async def get_collection(
+async def get_collection_by_id(
     collection_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     """Retrieve a specific collection by its ID."""
-
-    stmt = (
-        select(Collection)
-        .options(selectinload(Collection.files))
-        .where(Collection.id == collection_id)
+    collection = await CollectionService.get_collection_by_id(
+        collection_id=collection_id, session=session
     )
-    result = await session.execute(stmt)
-    collection = result.scalar_one_or_none()
-
     if not collection:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Collection not found",
+            detail=f"Collection id {collection_id} not found",
         )
-
-    return schemas.collection.Collection.model_validate(collection)
+    return collection
 
 
 @router.post(
@@ -82,49 +58,22 @@ async def create_collection(
     Create a new collection in the database.
     This will also create a vector table for the collection in the vector store.
     """
+    try:
+        new_collection = await CollectionService.create_collection(
+            collection_data=collection, session=session
+        )
 
-    # Validate the embedding model and get its dimension
-    model_output_map = {
-        model.value["name"]: model.value["output"] for model in GoogleEmbeddingModel
-    }
-    dimension = model_output_map.get(collection.embedding_model)
-    if not dimension:
+        return new_collection
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid embedding model '{collection.embedding_model}'. "
-            f"Must be one of {[m.value['name'] for m in GoogleEmbeddingModel]}",
+            detail=str(e),
         )
-
-    # Create a new collection instance
-    new_collection = Collection(
-        name=collection.name,
-        description=collection.description,
-        embedding_model=collection.embedding_model,
-    )
-
-    session.add(new_collection)
-    await session.flush()  # Ensure the collection ID is generated before creating the vector table
-
-    try:
-        # Create a vector table for the new collection
-        await VectorStore.create_collection_vector_table(
-            session=session,
-            collection_id=str(new_collection.id),
-            dimension=dimension,
-        )
-
-        # Commit the session to save the collection and vector table
-        await session.commit()
-        await session.refresh(new_collection)
-
-    except Exception as e:
-        await session.rollback()
+    except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create collection: {str(e)}",
+            detail=str(e),
         )
-
-    return schemas.collection.Collection.model_validate(new_collection)
 
 
 @router.put(
@@ -138,28 +87,23 @@ async def update_collection(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Update an existing collection by its ID."""
-    stmt = select(Collection).where(Collection.id == collection_id)
-    result = await session.execute(stmt)
-    existing_collection = result.scalar_one_or_none()
-
-    if not existing_collection:
+    try:
+        updated_collection = await CollectionService.update_collection(
+            collection_id=collection_id,
+            collection_data=collection,
+            session=session,
+        )
+        return updated_collection
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Collection not found",
+            detail=str(e),
         )
-
-    # Update the collection fields
-    existing_collection.name = collection.name
-    existing_collection.description = (
-        collection.description
-        if collection.description is not None
-        else existing_collection.description
-    )
-
-    await session.commit()
-    await session.refresh(existing_collection)
-
-    return schemas.collection.Collection.model_validate(existing_collection)
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
 
 
 @router.delete("/{collection_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -171,33 +115,19 @@ async def delete_collection(
     Delete a collection by its ID.
     This will also drop the vector table associated with the collection.
     """
-    stmt = select(Collection).where(Collection.id == collection_id)
-    result = await session.execute(stmt)
-    collection = result.scalar_one_or_none()
-
-    if not collection:
+    try:
+        await CollectionService.delete_collection(
+            collection_id=collection_id, session=session
+        )
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Collection not found",
+            detail=str(e),
         )
-
-    try:
-        await VectorStore.drop_collection_vector_table(
-            session=session,
-            collection_id=str(collection.id),
-        )
-        await session.delete(collection)
-        await session.commit()
-
-    except Exception as e:
-        await session.rollback()
+    except RuntimeError as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete collection: {str(e)}",
+            detail=str(e),
         )
-
-    # TODO: remove files without blocking
-    for file in collection.files:
-        delete_file(file.path)
 
     return "Collection deleted successfully"

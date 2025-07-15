@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Union
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -18,8 +19,8 @@ class File(FileBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: UUID
-    collection_id: UUID
+    id: Union[UUID, str]
+    collection_id: Union[UUID, str]
     path: str
     created_at: datetime
 
