@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from database.db import init_db
-from routers import collections, files
+from routers import collections
 from settings import APP_ENVIRONMENT
 
 
@@ -25,7 +25,6 @@ app = FastAPI(
 )
 
 app.include_router(collections.router, prefix="/api")
-app.include_router(files.router, prefix="/api")
 
 # Include utils router only in non-production environment
 if APP_ENVIRONMENT != "production":

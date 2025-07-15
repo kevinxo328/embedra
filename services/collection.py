@@ -1,18 +1,75 @@
-from sqlalchemy import select
+import uuid
+from typing import Union
+
+from langchain_core.documents import Document
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database.models.collection import Collection
+from database.models.file import File
 from schemas.collection import CollectionCreate, CollectionUpdate
+from schemas.file import ValidatedUploadFile
 from settings import VectorStore
-from utils.embeddings import GoogleEmbeddingModel
-from utils.file_uploader import delete_file
-from utils.general import generate_collection_vector_table_name
+from utils.doc_processor import markitdown_converter, split_markdown
+from utils.embeddings import GoogleEmbeddingModel, get_google_embeddings
+from utils.file_uploader import delete_file, save_file
 
 
 class CollectionService:
     def __init__(self):
         pass
+
+    def __generate_collection_vector_table_name(
+        self, collection_id: Union[uuid.UUID, str]
+    ) -> str:
+        """
+        Generate a vector table name for the collection.
+        PostgreSQL doesn't allow hyphens in table names, so we replace them with underscores.
+        """
+
+        return f"collection_{str(collection_id).replace('-', '_')}"
+
+    def __extract_file(self, path: str) -> list[Document]:
+        """
+        Extract documents from a file path.
+        """
+        convert_result = markitdown_converter(source=path)
+        return split_markdown(markdown=convert_result.markdown)
+
+    async def __store_documents_to_collection(
+        self,
+        docs: list[Document],
+        collection_id: str,
+        embedding_model: str,
+        file_id: str,
+        session: AsyncSession,
+    ):
+        """Store documents to collection vector store."""
+        vector_table_name = self.__generate_collection_vector_table_name(collection_id)
+        VectorModel = await VectorStore.get_vector_model(
+            session=session, table_name=vector_table_name
+        )
+
+        if not VectorModel:
+            raise ValueError(f"Vector model for collection {collection_id} not found")
+
+        embeddings = get_google_embeddings(embedding_model)
+
+        for doc in docs:
+            embedding = embeddings.embed_query(doc.page_content)
+            vector_row = VectorModel(
+                text=doc.page_content,
+                embedding=embedding,
+                metadata={
+                    **doc.metadata,
+                    "collection_id": collection_id,
+                    "file_id": file_id,
+                },
+            )
+            session.add(vector_row)
+
+        await session.commit()
 
     @staticmethod
     async def get_collections(session: AsyncSession):
@@ -36,13 +93,6 @@ class CollectionService:
     ):
         """
         Retrieve a specific collection by its ID.
-
-        Args:
-            collection_id: The UUID string of the collection to retrieve
-            session: Database session
-
-        Returns:
-            Collection object if found, None if not found
 
         Raises:
             RuntimeError: If database query fails
@@ -95,7 +145,10 @@ class CollectionService:
             raise RuntimeError("Failed to create collection in database.") from e
 
         # Create a vector table for the new collection
-        vector_table_name = generate_collection_vector_table_name(collection.id)
+        instance = cls()
+        vector_table_name = instance.__generate_collection_vector_table_name(
+            collection.id
+        )
         try:
             await VectorStore.create_vector_table(
                 session,
@@ -164,7 +217,10 @@ class CollectionService:
 
         # Store file paths before deletion for cleanup
         file_paths = [file.path for file in collection.files]
-        vector_table_name = generate_collection_vector_table_name(collection.id)
+        instance = cls()
+        vector_table_name = instance.__generate_collection_vector_table_name(
+            collection.id
+        )
 
         try:
             # Delete vector table first
@@ -189,5 +245,198 @@ class CollectionService:
                 # Log the error but don't fail the operation
                 # File cleanup is not critical for data consistency
                 pass
+
+        return True
+
+    @classmethod
+    async def get_collection_files(cls, collection_id: str, session: AsyncSession):
+        """
+        Retrieve all files associated with a specific collection.
+
+        Raises:
+            ValueError: If the collection ID is not found.
+            RuntimeError: If database operations fail.
+        """
+        try:
+            collection = await cls.get_collection_by_id(
+                collection_id, session, with_files=True
+            )
+            if not collection:
+                raise ValueError(f"Collection with ID {collection_id} not found")
+            return collection.files
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to retrieve files for collection with ID {collection_id}"
+            ) from e
+
+    @staticmethod
+    async def get_collection_file(
+        collection_id: str, file_id: str, session: AsyncSession
+    ):
+        """
+        Retrieve a specific file by its ID within a collection.
+
+        Raises:
+            RuntimeError: If database query fails.
+        """
+        try:
+            stmt = select(File).where(
+                File.id == file_id, File.collection_id == collection_id
+            )
+            result = await session.execute(stmt)
+            file = result.scalar_one_or_none()
+
+            if not file:
+                raise ValueError(
+                    f"File with id {file_id} not found in collection {collection_id}"
+                )
+
+            return file
+        except Exception as e:
+            raise RuntimeError("Failed to retrieve file from database") from e
+
+    @classmethod
+    async def upload_file_to_collection(
+        cls, collection_id: str, file: ValidatedUploadFile, session: AsyncSession
+    ):
+        """
+        Upload a file to a specific collection.
+
+        Raises:
+            ValueError: If the collection ID is not found.
+            RuntimeError: If database operations fail.
+        """
+
+        # Check if the collection exists using the private method
+        collection = await cls.get_collection_by_id(
+            collection_id=collection_id, session=session
+        )
+
+        if not collection:
+            raise ValueError(f"Collection with id {collection_id} not found")
+
+        try:
+            save_file_path = save_file(file)
+            new_file = File(
+                filename=file.filename,
+                filesize=file.size,
+                path=save_file_path,
+                content_type=file.content_type,
+                collection_id=collection_id,
+            )
+            session.add(new_file)
+            await session.flush()
+
+        except Exception as e:
+            raise RuntimeError("Failed to upload file to collection") from e
+
+        instance = cls()
+        docs = instance.__extract_file(save_file_path)
+        try:
+            await instance.__store_documents_to_collection(
+                docs=docs,
+                collection_id=collection_id,
+                embedding_model=collection.embedding_model,
+                file_id=str(new_file.id),
+                session=session,
+            )
+        except Exception as e:
+            raise RuntimeError("Failed to store documents in collection") from e
+
+        await session.commit()
+        await session.refresh(new_file)
+
+        return new_file
+
+    @classmethod
+    async def delete_file_from_collection(
+        cls, collection_id: str, file_id: str, session: AsyncSession
+    ):
+        """
+        Delete a file by its ID from a specific collection.
+
+        Raises:
+            ValueError: If the file ID is not found in the collection.
+            RuntimeError: If database operations fail.
+        """
+
+        try:
+            file = await cls.get_collection_file(
+                collection_id=collection_id, file_id=file_id, session=session
+            )
+            if not file:
+                raise ValueError(
+                    f"File with id {file_id} not found in collection {collection_id}"
+                )
+
+            # Delete the vector row associated with the file
+            instance = cls()
+            VectorModel = await VectorStore.get_vector_model(
+                session,
+                table_name=instance.__generate_collection_vector_table_name(
+                    file.collection_id
+                ),
+            )
+
+            if VectorModel:
+                smst = delete(VectorModel).where(
+                    VectorModel.metadata["file_id"].astext == str(file.id)  # type: ignore
+                )
+                await session.execute(smst)
+
+            # Delete the file record from the database
+            stmt = delete(File).where(File.id == file_id)
+
+            # TODO: avoid blocking I/O operation in async context
+            # Delete the file from the filesystem
+            delete_file(file.path)
+
+            await session.execute(stmt)
+            await session.commit()
+
+            return f"File {file_id} deleted successfully."
+        except Exception as e:
+            raise RuntimeError(f"Failed to delete file, {e}") from e
+
+    @classmethod
+    async def delete_collection_files(cls, collection_id: str, session: AsyncSession):
+        """
+        Delete all files associated with a specific collection.
+
+        Raises:
+            ValueError: If the collection ID is not found.
+            RuntimeError: If database operations fail.
+        """
+        try:
+            collection = await cls.get_collection_by_id(
+                collection_id=collection_id, session=session, with_files=True
+            )
+            if not collection:
+                raise ValueError(f"Collection with ID {collection_id} not found")
+
+            instance = cls()
+            VectorModel = await VectorStore.get_vector_model(
+                session,
+                table_name=instance.__generate_collection_vector_table_name(
+                    collection_id
+                ),
+            )
+
+            if VectorModel:
+                smst = delete(VectorModel).where(
+                    VectorModel.metadata["collection_id"].astext == collection_id  # type: ignore
+                )
+                await session.execute(smst)
+
+            for file in collection.files:
+                await cls.delete_file_from_collection(
+                    collection_id=collection_id, file_id=str(file.id), session=session
+                )
+
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to delete files in collection {collection_id}"
+            ) from e
 
         return True
