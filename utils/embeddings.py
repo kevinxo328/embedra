@@ -14,7 +14,6 @@ class GoogleEmbeddingModel(Enum):
     - https://ai.google.dev/gemini-api/docs/models#gemini-embedding
     """
 
-    EMBEDDING_001 = "models/embedding-001", 2048, 768
     EMBEDDING_004 = (
         "models/text-embedding-004",
         2048,
@@ -55,7 +54,7 @@ class GoogleEmbeddingModel(Enum):
 
 def get_google_embeddings(
     model_name: str = GoogleEmbeddingModel.EMBEDDING_004.name,
-    task_type: str = "RETRIEVAL_QUERY",
+    task_type: str = "RETRIEVAL_DOCUMENT",
 ) -> GoogleGenerativeAIEmbeddings:
     # Check model should be one of the GoogleEmbeddingModel enum's name
     try:
