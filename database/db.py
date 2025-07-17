@@ -1,13 +1,9 @@
-import logging
-
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from database.models.base import Base
 from settings import DATABASE_URL
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from utils.logger import logger
 
 
 async def init_db():

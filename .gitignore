@@ -85,6 +85,7 @@ local_settings.py
 
 # Logs
 *.log
+*.log.*
 
 # Jupyter Notebook
 .ipynb_checkpoints
