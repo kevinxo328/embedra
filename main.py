@@ -1,10 +1,12 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from database.db import init_db
 from routers import collections
 from settings import APP_ENVIRONMENT
+from utils.logger import logger
 
 
 @asynccontextmanager
@@ -23,6 +25,26 @@ app = FastAPI(
     docs_url="/api/docs" if APP_ENVIRONMENT != "production" else None,
     redoc_url="/api/redoc" if APP_ENVIRONMENT != "production" else None,
 )
+
+
+@app.exception_handler(Exception)
+async def exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler for the application.
+    """
+    try:
+        body = await request.body()
+    except Exception:
+        body = None
+
+    exception_message = f"Unhandled exception occurred: {exc}. Method: {request.method}, URL: {request.url}, Headers: {dict(request.headers)}, Query Params: {dict(request.query_params)}, Body: {body.decode('utf-8') if body else 'N/A'}"
+    logger.exception(exception_message)
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
+
 
 app.include_router(collections.router, prefix="/api")
 
