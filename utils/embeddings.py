@@ -55,6 +55,7 @@ class GoogleEmbeddingModel(Enum):
 
 def get_google_embeddings(
     model_name: str = GoogleEmbeddingModel.EMBEDDING_004.name,
+    task_type: str = "RETRIEVAL_QUERY",
 ) -> GoogleGenerativeAIEmbeddings:
     # Check model should be one of the GoogleEmbeddingModel enum's name
     try:
@@ -64,4 +65,4 @@ def get_google_embeddings(
             f"Invalid embedding model '{model_name}'. Must be one of {[m.name for m in GoogleEmbeddingModel]}"
         )
 
-    return GoogleGenerativeAIEmbeddings(model=model_name)
+    return GoogleGenerativeAIEmbeddings(model=model_name, task_type=task_type)

@@ -440,3 +440,52 @@ class CollectionService:
             ) from e
 
         return True
+
+    @classmethod
+    async def similarity_search(
+        cls,
+        collection_id: Union[uuid.UUID, str],
+        query: str,
+        session: AsyncSession,
+        top_k: int = 5,
+        threshold: Union[float, None] = None,
+    ):
+        """
+        Perform a similarity search in the specified collection.
+        """
+        instance = cls()
+        vector_table_name = instance.__generate_collection_vector_table_name(
+            collection_id
+        )
+        collection = await cls.get_collection_by_id(
+            collection_id=str(collection_id), session=session
+        )
+
+        if not collection:
+            raise ValueError(f"Collection with ID {collection_id} not found")
+
+        # Get the embedding model for the collection
+        embedding_model = collection.embedding_model
+        embeddings = get_google_embeddings(embedding_model)
+
+        # Embed the query
+        query_vector = embeddings.embed_query(query)
+
+        try:
+            results = await VectorStore.similarity_search(
+                session=session,
+                table_name=vector_table_name,
+                query_vector=query_vector,
+                top_k=top_k,
+                threshold=threshold,
+            )
+        except ValueError as e:
+            raise ValueError(
+                f"Vector model for collection {collection_id} not found"
+            ) from e
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to perform similarity search in collection {collection_id}"
+            ) from e
+
+        return results

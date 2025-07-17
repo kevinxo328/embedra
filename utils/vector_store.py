@@ -1,8 +1,9 @@
 from collections import OrderedDict
+from typing import Union
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, String, Table, inspect, text
+from sqlalchemy import Column, String, Table, inspect, select, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import registry
@@ -76,7 +77,16 @@ class PostgresVectorStore:
                 self.embedding = embedding
                 self.metadata = metadata
 
-        self._registry.map_imperatively(VectorRow, table)
+        self._registry.map_imperatively(
+            VectorRow,
+            table,
+            properties={
+                "id": table.c.id,
+                "text": table.c.text,
+                "embedding": table.c.embedding,
+                "metadata": table.c.metadata,
+            },
+        )
         self._model_cache.set(table_name, VectorRow)
 
         return VectorRow
@@ -169,3 +179,56 @@ class PostgresVectorStore:
         await conn.run_sync(sync_drop_table)
 
         return True
+
+    async def similarity_search(
+        self,
+        session: AsyncSession,
+        table_name: str,
+        query_vector: list[float],
+        top_k=5,
+        threshold: Union[float, None] = None,
+    ):
+        """
+        Perform a similarity search in the specified vector table.
+        """
+        VectorModel = await self.get_vector_model(session, table_name)
+        if not VectorModel:
+            raise ValueError(f"Vector model for table '{table_name}' not found")
+
+        def sync_similarity_search(sync_conn):
+            """
+            Execute the similarity search query.
+            """
+            stmt = select(
+                VectorModel,
+                (1 - VectorModel.embedding.cosine_distance(query_vector)).label(  # type: ignore
+                    "similarity_score"
+                ),
+            ).order_by(
+                VectorModel.embedding.cosine_distance(query_vector)  # type: ignore
+            )
+
+            if threshold is not None:
+                stmt = stmt.filter(
+                    VectorModel.embedding.cosine_distance(query_vector) < threshold  # type: ignore
+                )
+
+            stmt = stmt.limit(top_k)
+            result = sync_conn.execute(stmt)
+            # return result.scalars().fetchall()
+            results = []
+            for row in result.all():
+                results.append(
+                    {
+                        "id": str(row.id),
+                        "text": row.text,
+                        # "embedding": row.embedding.tolist(),
+                        "metadata": row.metadata,
+                        "similarity_score": row.similarity_score,
+                    }
+                )
+            return results
+
+        conn = await session.connection()
+        results = await conn.run_sync(sync_similarity_search)
+        return results

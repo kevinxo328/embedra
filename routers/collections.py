@@ -1,3 +1,5 @@
+from typing import Union
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -284,3 +286,35 @@ async def delete_all_files_in_collection(
         )
 
     return "All files in collection deleted successfully"
+
+
+@router.get("/{collection_id}/similariy_search")
+async def similarity_search(
+    collection_id: str,
+    query: str,
+    k: int = 5,
+    threshold: Union[float, None] = None,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Perform a similarity search in the specified collection.
+    Returns documents that are similar to the query.
+    """
+    try:
+        return await CollectionService.similarity_search(
+            collection_id=collection_id,
+            query=query,
+            session=session,
+            top_k=k,
+            threshold=threshold,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )
