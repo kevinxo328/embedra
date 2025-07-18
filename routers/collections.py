@@ -12,8 +12,8 @@ from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import schemas.collection
+import schemas.common
 import schemas.file
-import schemas.utils
 from database.session import get_db_session
 from services.collection import CollectionService, CollectionServiceException
 from utils.file_uploader import delete_file, validate_upload_file
@@ -28,13 +28,25 @@ router = APIRouter(
 @router.get(
     "/",
     status_code=status.HTTP_200_OK,
-    response_model=list[schemas.collection.Collection],
+    response_model=schemas.common.PaginatedResponse[schemas.collection.Collection],
 )
 async def get_collections(
+    filter: schemas.collection.CollectionFilter = Depends(),
+    pagination: schemas.collection.CollectionPaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Retrieve all collections from the database."""
-    return await CollectionService.get_collections(session)
+    """
+    Retrieve all collections from the database.
+
+    Returns:
+        data: A paginated list of collections.
+        total: Total number of collections before pagination.
+        page: Current page number.
+        page_size: Number of items per page.
+    """
+    return await CollectionService.get_collections(
+        filter=filter, pagination=pagination, session=session
+    )
 
 
 @router.get(
@@ -110,7 +122,7 @@ async def update_collection(
 @router.delete(
     "/{collection_id}",
     status_code=status.HTTP_200_OK,
-    response_model=schemas.utils.DeleteResponse,
+    response_model=schemas.common.DeleteResponse,
 )
 async def delete_collection(
     collection_id: str,
@@ -130,7 +142,7 @@ async def delete_collection(
         # Schedule file deletion in the background
         for path in paths:
             background_tasks.add_task(delete_file, path)
-        return schemas.utils.DeleteResponse(deleted_ids=[collection_id])
+        return schemas.common.DeleteResponse(deleted_ids=[collection_id])
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -141,41 +153,31 @@ async def delete_collection(
 @router.get(
     "/{collection_id}/files",
     status_code=status.HTTP_200_OK,
-    response_model=list[schemas.file.File],
+    response_model=schemas.common.PaginatedResponse[schemas.file.File],
 )
 async def get_collection_files(
-    collection_id: str, session: AsyncSession = Depends(get_db_session)
+    collection_id: str,
+    filter: schemas.file.FileFilter = Depends(),
+    pagination: schemas.file.FilePaginationParams = Depends(),
+    session: AsyncSession = Depends(get_db_session),
 ):
-    """Retrieve all files associated with a specific collection."""
+    """
+    Retrieve files associated with a specific collection.
+
+       Returns:
+           data: A paginated list of files in the collection.
+           total: Total number of files in the collection before pagination.
+           page: Current page number.
+           page_size: Number of items per page.
+    """
     try:
-        return await CollectionService.get_collection_files(collection_id, session)
+        return await CollectionService.get_collection_files(
+            collection_id, filter, pagination, session
+        )
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Collection with ID {collection_id} not found",
-        )
-
-
-# TODO: Integrate with get_collection_files
-@router.get(
-    "/{collection_id}/files/{file_id}",
-    status_code=status.HTTP_200_OK,
-    response_model=schemas.file.File,
-)
-async def get_collection_file(
-    collection_id: str,
-    file_id: str,
-    session: AsyncSession = Depends(get_db_session),
-):
-    """Retrieve a specific file by its ID within a collection."""
-    try:
-        return await CollectionService.get_collection_file(
-            collection_id=collection_id, file_id=file_id, session=session
-        )
-    except NoResultFound:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File with ID {file_id} not found in collection {collection_id}",
         )
 
 
@@ -220,11 +222,11 @@ async def upload_file_to_collection(
 @router.delete(
     "/{collection_id}/files",
     status_code=status.HTTP_200_OK,
-    response_model=schemas.utils.DeleteResponse,
+    response_model=schemas.common.DeleteResponse,
 )
 async def delete_files_in_collection(
     collection_id: str,
-    request: schemas.utils.DeleteRequest,
+    request: schemas.common.DeleteRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ):

@@ -2,16 +2,21 @@ import uuid
 from typing import Union
 
 from langchain_core.documents import Document
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from database.models.collection import Collection
 from database.models.file import File
-from schemas.collection import CollectionCreate, CollectionUpdate
-from schemas.file import ValidatedUploadFile
-from schemas.utils import DeleteResponse
+from schemas.collection import (
+    CollectionCreate,
+    CollectionFilter,
+    CollectionPaginationParams,
+    CollectionUpdate,
+)
+from schemas.common import DeleteResponse, PaginatedResponse
+from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
 from settings import VectorStore
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import GoogleEmbeddingModel, get_google_embeddings
@@ -78,14 +83,53 @@ class CollectionService:
         await session.commit()
 
     @staticmethod
-    async def get_collections(session: AsyncSession):
+    async def get_collections(
+        filter: CollectionFilter,
+        pagination: CollectionPaginationParams,
+        session: AsyncSession,
+    ):
         """
         Retrieve all collections from the database.
+
+        Returns:
+            data: A paginated list of collections.
+            total: Total number of collections before pagination.
+            page: Current page number.
+            page_size: Number of items per page.
         """
-        stmt = select(Collection).order_by(Collection.created_at.desc())
+        base_stmt = select(Collection)
+
+        # Apply filtering
+        if filter.name:
+            base_stmt = base_stmt.where(Collection.name.ilike(f"%{filter.name}%"))
+
+        if filter.embedding_model:
+            base_stmt = base_stmt.where(
+                Collection.embedding_model == filter.embedding_model
+            )
+
+        # Count total items
+        total_stmt = select(func.count()).select_from(base_stmt.subquery())
+        total_result = await session.execute(total_stmt)
+        total = total_result.scalar_one()
+
+        # Apply pagination
+        stmt = base_stmt
+        if pagination.sort_by:
+            if pagination.sort_order == "asc":
+                stmt = stmt.order_by(getattr(Collection, pagination.sort_by).asc())
+            else:
+                stmt = stmt.order_by(getattr(Collection, pagination.sort_by).desc())
+        stmt = stmt.offset(pagination.offset).limit(pagination.limit)
+
         result = await session.execute(stmt)
         collections = result.scalars().all()
-        return collections
+        return PaginatedResponse(
+            data=collections,
+            total=total,
+            page=pagination.offset // pagination.limit + 1,
+            page_size=pagination.limit,
+        )
 
     @staticmethod
     async def get_collection_by_id(
@@ -204,33 +248,60 @@ class CollectionService:
         return file_paths
 
     @classmethod
-    async def get_collection_files(cls, collection_id: str, session: AsyncSession):
+    async def get_collection_files(
+        cls,
+        collection_id: str,
+        filter: FileFilter,
+        pagination: FilePaginationParams,
+        session: AsyncSession,
+    ):
         """
-        Retrieve all files associated with a specific collection.
+        Retrieve files associated with a specific collection.
+
+        Returns:
+            data: A paginated list of files in the collection.
+            total: Total number of files in the collection before pagination.
+            page: Current page number.
+            page_size: Number of items per page.
 
         Raises:
             NoResultFound: If the collection ID is not found
         """
-        collection = await cls.get_collection_by_id(
-            collection_id, session, with_files=True
-        )
-        return collection.files
+        # Validate collection ID
+        await cls.get_collection_by_id(collection_id, session)
 
-    @staticmethod
-    async def get_collection_file(
-        collection_id: str, file_id: str, session: AsyncSession
-    ):
-        """
-        Retrieve a specific file by its ID within a collection.
+        # Build the query
+        base_stmt = select(File).where(File.collection_id == collection_id)
 
-        Raises:
-            NoResultFound: If the file ID is not found in the collection.
-        """
-        stmt = select(File).where(
-            File.id == file_id, File.collection_id == collection_id
-        )
+        # Apply filtering
+        if filter.filename:
+            base_stmt = base_stmt.where(File.filename.ilike(f"%{filter.filename}%"))
+
+        if filter.content_type:
+            base_stmt = base_stmt.where(File.content_type == filter.content_type)
+
+        # Count total items
+        total_stmt = select(func.count()).select_from(base_stmt.subquery())
+        total_result = await session.execute(total_stmt)
+        total = total_result.scalar_one()
+
+        # Apply pagination
+        stmt = base_stmt
+        if pagination.sort_by:
+            if pagination.sort_order == "asc":
+                stmt = stmt.order_by(getattr(File, pagination.sort_by).asc())
+            else:
+                stmt = stmt.order_by(getattr(File, pagination.sort_by).desc())
+        stmt = stmt.offset(pagination.offset).limit(pagination.limit)
+
         result = await session.execute(stmt)
-        return result.scalar_one()
+        files = result.scalars().all()
+        return PaginatedResponse(
+            data=files,
+            total=total,
+            page=pagination.offset // pagination.limit + 1,
+            page_size=pagination.limit,
+        )
 
     @classmethod
     async def upload_file_to_collection(
@@ -347,11 +418,12 @@ class CollectionService:
 
                 try:
                     async with session.begin_nested():
-                        file = await cls.get_collection_file(
-                            collection_id=collection_id,
-                            file_id=file_id,
-                            session=session,
+                        file_result = await session.execute(
+                            select(File).where(
+                                File.id == file_id, File.collection_id == collection_id
+                            )
                         )
+                        file = file_result.scalar_one()
 
                         # Delete the file and its associated vectors
                         await session.delete(file)

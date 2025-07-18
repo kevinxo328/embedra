@@ -3,7 +3,7 @@ from io import BytesIO
 from fastapi import APIRouter, UploadFile, status
 from langchain_core.documents import Document
 
-import schemas.utils
+import schemas.common
 import settings
 import utils.doc_processor as doc_processor
 
@@ -17,7 +17,7 @@ router = APIRouter(
 @router.post(
     "/markitdown/path",
     status_code=status.HTTP_200_OK,
-    response_model=schemas.utils.MarkdownResponse,
+    response_model=schemas.common.MarkdownResponse,
 )
 async def convert_markdown_by_path(path: str):
     """
@@ -32,7 +32,7 @@ async def convert_markdown_by_path(path: str):
 @router.post(
     "/markitdown/file",
     status_code=status.HTTP_200_OK,
-    response_model=schemas.utils.MarkdownResponse,
+    response_model=schemas.common.MarkdownResponse,
 )
 async def convert_markdown_by_file(file: UploadFile):
     """
