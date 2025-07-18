@@ -1,3 +1,4 @@
+import re
 from collections import OrderedDict
 from typing import Union
 from uuid import uuid4
@@ -39,6 +40,13 @@ class PostgresVectorStore:
         self._registry = registry()
         self._metadata = self._registry.metadata
         self._model_cache = LRUCache(max_cache_size)
+
+    def __validate_table_name(self, table_name: str):
+        """
+        Validate the table name to prevent SQL injection.
+        Only alphanumeric characters and underscores are allowed.
+        """
+        return re.match(r"^[a-zA-Z0-9_]+$", table_name)
 
     def __create_vector_table_class(self, table_name: str, dimension: int):
         """
@@ -92,8 +100,11 @@ class PostgresVectorStore:
         return VectorRow
 
     async def create_vector_table(
-        self, session: AsyncSession, table_name: str, dimension: int
+        self, table_name: str, dimension: int, session: AsyncSession
     ):
+        if not self.__validate_table_name(table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+
         # Check if the table already exists in the cache
         cached = self._model_cache.get(table_name)
         if cached is not None:
@@ -110,18 +121,19 @@ class PostgresVectorStore:
                 if table_name in self._metadata.tables:
                     self._metadata.tables[table_name].create(bind=sync_conn)
                 else:
-                    # 如果表格不在 metadata 中，重新創建 metadata
                     self._metadata.create_all(bind=sync_conn)
 
         conn = await session.connection()
         await conn.run_sync(sync_check_create)
-
         return vector_row_class
 
     async def get_vector_model(self, session: AsyncSession, table_name: str):
         """
         Get the vector model for the specified table.
         """
+        if not self.__validate_table_name(table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+
         cached = self._model_cache.get(table_name)
         if cached:
             return cached
@@ -149,14 +161,15 @@ class PostgresVectorStore:
 
         return self.__create_vector_table_class(table_name, int(dimension))
 
-    async def drop_vector_table(self, session: AsyncSession, table_name: str):
+    async def drop_vector_table(
+        self,
+        table_name: str,
+        session: AsyncSession,
+    ):
         """
         Drop the vector table with the specified name.
         """
-        import re
-
-        # Validate table name to prevent injection (only allow alphanumeric and underscore)
-        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+        if not self.__validate_table_name(table_name):
             raise ValueError(f"Invalid table name: {table_name}")
 
         # Remove from cache first
@@ -191,6 +204,9 @@ class PostgresVectorStore:
         """
         Perform a similarity search in the specified vector table.
         """
+        if not self.__validate_table_name(table_name):
+            raise ValueError(f"Invalid table name: {table_name}")
+
         VectorModel = await self.get_vector_model(session, table_name)
         if not VectorModel:
             raise ValueError(f"Vector model for table '{table_name}' not found")
