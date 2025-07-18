@@ -218,59 +218,43 @@ async def upload_file_to_collection(
 
 
 @router.delete(
-    "/{collection_id}/files/{file_id}",
+    "/{collection_id}/files",
     status_code=status.HTTP_200_OK,
     response_model=schemas.utils.DeleteResponse,
 )
-async def delete_file_from_collection(
+async def delete_files_in_collection(
     collection_id: str,
-    file_id: str,
+    request: schemas.utils.DeleteRequest,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ):
     """
-    Delete a specific file from a collection.
-    This will also remove the file from the server.
+    Delete specific files in a specific collection.
     """
     try:
-        path = await CollectionService.delete_file_from_collection(
-            collection_id=collection_id, file_id=file_id, session=session
+        result, delete_file_paths = await CollectionService.delete_collection_files(
+            collection_id=collection_id,
+            file_ids=request.ids,
+            all=request.all,
+            session=session,
         )
+
     except NoResultFound:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"File with ID {file_id} not found in collection {collection_id}",
+            detail=f"Collection with ID {collection_id} not found",
+        )
+    except CollectionServiceException as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
 
     # TODO: Handle file deletion in a more robust way. (e.g., Celery task + retry logic)
-    background_tasks.add_task(delete_file, path)
-    return schemas.utils.DeleteResponse(deleted_ids=[file_id])
+    for path in delete_file_paths:
+        background_tasks.add_task(delete_file, path)
 
-
-# TODO: Integrate with delete_file_from_collection
-# @router.delete(
-#     "/{collection_id}/files",
-#     status_code=status.HTTP_204_NO_CONTENT,
-# )
-# async def delete_all_files_in_collection(
-#     collection_id: str,
-#     session: AsyncSession = Depends(get_db_session),
-# ):
-#     """
-#     Delete all files in a specific collection.
-#     This will also remove the files from the server.
-#     """
-#     try:
-#         await CollectionService.delete_collection_files(
-#             collection_id=collection_id, session=session
-#         )
-#     except NoResultFound:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail=f"Collection with ID {collection_id} not found",
-#         )
-
-#     return "All files in collection deleted successfully"
+    return result
 
 
 @router.get("/{collection_id}/similariy_search")

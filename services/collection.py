@@ -3,6 +3,7 @@ from typing import Union
 
 from langchain_core.documents import Document
 from sqlalchemy import delete, select
+from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -10,6 +11,7 @@ from database.models.collection import Collection
 from database.models.file import File
 from schemas.collection import CollectionCreate, CollectionUpdate
 from schemas.file import ValidatedUploadFile
+from schemas.utils import DeleteResponse
 from settings import VectorStore
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import GoogleEmbeddingModel, get_google_embeddings
@@ -275,71 +277,116 @@ class CollectionService:
         return new_file
 
     @classmethod
-    async def delete_file_from_collection(
-        cls, collection_id: str, file_id: str, session: AsyncSession
+    async def delete_collection_files(
+        cls,
+        collection_id: str,
+        file_ids: Union[list[str], None],
+        all: bool,
+        session: AsyncSession,
     ):
         """
-        Delete a file by its ID from a specific collection.
-        This will delete the file record from the database and return the file path for cleanup avoiding blocking I/O operations.
+        Delete specific files in a specific collection.
+        If `all` is True, delete all files in the collection.
+
+        Args:
+            collection_id (str): The ID of the collection.
+            file_ids (list[str] | None): List of file IDs to delete. If None, no specific files are deleted.
+            all (bool): If True, delete all files in the collection.
+
+        Returns:
+            deleted_file_ids (list[str]): List of deleted file IDs.
+            failed_file_ids (list[str]): List of file IDs that were not found in the collection.
+            failed_messages (list[str]): List of error messages for failed deletions.
+            delete_file_paths (list[str]): List of file paths that need to be processed for deletion.
+
 
         Raises:
-            NoResultFound: If the file ID is not found in the collection.
+            NoResultFound: If the collection ID is not found.
+            CollectionServiceException: If no files are specified for deletion and `all` is False.
         """
-        file = await cls.get_collection_file(collection_id, file_id, session)
-        delete_file_path = file.path
 
-        # Delete the vector row associated with the file
-        instance = cls()
-        VectorModel = await VectorStore.get_vector_model(
-            session,
-            table_name=instance.__generate_collection_vector_table_name(
-                file.collection_id
-            ),
+        # Validate collection ID
+        collection = await cls.get_collection_by_id(
+            collection_id=collection_id, session=session, with_files=True
         )
 
-        if VectorModel:
-            smst = delete(VectorModel).where(
-                VectorModel.metadata["file_id"].astext == str(file.id)  # type: ignore
+        if not file_ids and not all:
+            raise CollectionServiceException(
+                "No files specified for deletion. Provide file IDs or set 'all' to True."
             )
-            await session.execute(smst)
 
-        # Delete the file record from the database
-        stmt = delete(File).where(File.id == file_id)
-        await session.execute(stmt)
+        VectorModel = await VectorStore.get_vector_model(
+            session,
+            table_name=cls().__generate_collection_vector_table_name(collection_id),
+        )
 
-        return delete_file_path
+        deleted_file_ids = []
+        failed_file_ids = []
+        failed_messages = []
+        delete_file_paths = []
 
-    # @classmethod
-    # async def delete_collection_files(cls, collection_id: str, session: AsyncSession):
-    #     """
-    #     Delete all files associated with a specific collection.
+        if all and collection.files:
+            delete_file_paths = [file.path for file in collection.files]
+            deleted_file_ids = [str(file.id) for file in collection.files]
 
-    #     Raises:
-    #         NoResultFound: If the collection ID is not found.
-    #     """
+            # Delete all files in the collection and their vectors
+            await session.execute(
+                delete(File).where(File.collection_id == collection_id)
+            )
+            if VectorModel:
+                smst = delete(VectorModel).where(
+                    VectorModel.metadata["collection_id"].astext == collection_id  # type: ignore
+                )
+                await session.execute(smst)
 
-    #     collection = await cls.get_collection_by_id(
-    #         collection_id=collection_id, session=session, with_files=True
-    #     )
+        elif file_ids:
+            for file_id in file_ids:
+                # Begin a nested transaction to ensure atomicity
+                # This allows us to rollback only the current file deletion if it fails
+                # while keeping the session open for other operations.
 
-    #     instance = cls()
-    #     VectorModel = await VectorStore.get_vector_model(
-    #         session,
-    #         table_name=instance.__generate_collection_vector_table_name(collection_id),
-    #     )
+                try:
+                    async with session.begin_nested():
+                        file = await cls.get_collection_file(
+                            collection_id=collection_id,
+                            file_id=file_id,
+                            session=session,
+                        )
 
-    #     if VectorModel:
-    #         smst = delete(VectorModel).where(
-    #             VectorModel.metadata["collection_id"].astext == collection_id  # type: ignore
-    #         )
-    #         await session.execute(smst)
+                        # Delete the file and its associated vectors
+                        await session.delete(file)
+                        if VectorModel:
+                            smst = delete(VectorModel).where(
+                                VectorModel.metadata["collection_id"].astext == collection_id,  # type: ignore
+                                VectorModel.metadata["file_id"].astext == file_id,  # type: ignore
+                            )
+                            await session.execute(smst)
 
-    #     for file in collection.files:
-    #         await cls.delete_file_from_collection(
-    #             collection_id=collection_id, file_id=str(file.id), session=session
-    #         )
+                        delete_file_paths.append(file.path)
+                        deleted_file_ids.append(file_id)
 
-    #     return True
+                except Exception as e:
+                    failed_file_ids.append(file_id)
+                    if isinstance(e, NoResultFound):
+                        failed_messages.append(
+                            f"File with ID {file_id} not found in collection {collection_id}."
+                        )
+                    elif isinstance(e, SQLAlchemyError):
+                        failed_messages.append(
+                            f"Database error while deleting file with ID {file_id} in collection {collection_id}: {str(e)}"
+                        )
+                    else:
+                        failed_messages.append(
+                            f"Unexpected error while deleting file with ID {file_id} in collection {collection_id}: {str(e)}"
+                        )
+        return (
+            DeleteResponse(
+                deleted_ids=deleted_file_ids,
+                failed_ids=failed_file_ids,
+                failed_messages=failed_messages,
+            ),
+            delete_file_paths,
+        )
 
     @classmethod
     async def similarity_search(

@@ -8,5 +8,12 @@ class MarkdownResponse(BaseModel):
     title: Union[str, None] = None
 
 
+class DeleteRequest(BaseModel):
+    ids: Union[list[str], None] = None
+    all: bool = False
+
+
 class DeleteResponse(BaseModel):
     deleted_ids: list[str]
+    failed_ids: list[str] = []
+    failed_messages: list[str] = []
