@@ -16,11 +16,15 @@ from schemas.collection import (
     CollectionUpdate,
 )
 from schemas.common import DeleteResponse, PaginatedResponse
+from schemas.embedding import EmbeddingModelMetadata
 from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
 from settings import VectorStore
 from utils.doc_processor import markitdown_converter, split_markdown
-from utils.embeddings import GoogleEmbeddingModel, get_google_embeddings
-from utils.file_uploader import save_file
+from utils.embeddings import (
+    EmbeddingModelProvider,
+    get_embedding_model_by_provider_name,
+)
+from utils.file_uploader import delete_file, save_file
 
 
 class CollectionServiceException(Exception):
@@ -52,7 +56,9 @@ class CollectionService:
         self,
         docs: list[Document],
         collection_id: str,
+        embedding_model_provider: str,
         embedding_model: str,
+        embedding_metadata: Union[EmbeddingModelMetadata, None],
         file_id: str,
         session: AsyncSession,
     ):
@@ -65,7 +71,11 @@ class CollectionService:
         if not VectorModel:
             raise ValueError(f"Vector model for collection {collection_id} not found")
 
-        embeddings = get_google_embeddings(embedding_model)
+        embeddings = get_embedding_model_by_provider_name(
+            embedding_model_provider,
+            embedding_model,
+            embedding_metadata,
+        )
 
         for doc in docs:
             embedding = embeddings.embed_query(doc.page_content)
@@ -79,8 +89,6 @@ class CollectionService:
                 },
             )
             session.add(vector_row)
-
-        await session.commit()
 
     @staticmethod
     async def get_collections(
@@ -154,21 +162,18 @@ class CollectionService:
         cls, collection_data: CollectionCreate, session: AsyncSession
     ):
         """
-        Create a new collection in the database.
-        This also creates a vector table for the collection in the vector store.
+        Create a new collection.
+        This will also create a vector table for the collection in the vector store.
 
-        Raises:
-            ValueError: If the embedding model is invalid
+        ### Args:
+        - name: The name of the collection.
+        - description: A brief description of the collection.
+        - embedding_model_provider: The provider of the embedding model. See [**/api/embeddings/providers**](#/embeddings/get_embedding_providers_api_embeddings_providers_get) for available providers.
+        - embedding_model: The name of the embedding model to use. See [Langchain documentation](https://python.langchain.com/docs/integrations/text_embedding/) for more information.
+        - embedding_model_metadata: Additional metadata for the embedding model, such as endpoint and dimensions.
         """
-        # Validate the embedding model and get its dimension
-        try:
-            dimension = GoogleEmbeddingModel.from_name(
-                collection_data.embedding_model
-            ).output_dim
-        except ValueError as e:
-            raise CollectionServiceException(
-                f"Invalid embedding model '{collection_data.embedding_model}'. "
-            ) from e
+        # Validate the embedding model provider
+        EmbeddingModelProvider(collection_data.embedding_model_provider)
 
         collection = Collection(**collection_data.model_dump())
         session.add(collection)
@@ -181,7 +186,6 @@ class CollectionService:
         )
         await VectorStore.create_vector_table(
             vector_table_name,
-            dimension,
             session,
         )
         return collection
@@ -207,7 +211,6 @@ class CollectionService:
             if value is not None:
                 setattr(collection, key, value)
 
-        await session.commit()
         await session.refresh(collection)
         return collection
 
@@ -334,14 +337,19 @@ class CollectionService:
         instance = cls()
         docs = instance.__extract_file(save_file_path)
         try:
+            embedding_metadata = collection.embedding_model_metadata
+
             await instance.__store_documents_to_collection(
                 docs=docs,
                 collection_id=collection_id,
                 embedding_model=collection.embedding_model,
                 file_id=str(new_file.id),
                 session=session,
+                embedding_metadata=embedding_metadata,
+                embedding_model_provider=collection.embedding_model_provider,
             )
         except Exception as e:
+            delete_file(save_file_path)
             raise RuntimeError("Failed to store documents in collection") from e
 
         await session.refresh(new_file)
@@ -485,7 +493,17 @@ class CollectionService:
 
         # Get the embedding model for the collection
         embedding_model = collection.embedding_model
-        embeddings = get_google_embeddings(embedding_model)
+        embedding_model_provider = collection.embedding_model_provider
+        embedding_metadata = collection.embedding_model_metadata
+
+        try:
+            embeddings = get_embedding_model_by_provider_name(
+                embedding_model_provider, embedding_model, embedding_metadata
+            )
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid embedding model provider '{embedding_model_provider}' or model '{embedding_model}'."
+            ) from e
 
         # Embed the query
         query_vector = embeddings.embed_query(query)

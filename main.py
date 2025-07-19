@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from database.db import init_db
-from routers import collections
+from routers import collections, embeddings
 from settings import APP_ENVIRONMENT
 from utils.logger import logger
 
@@ -47,6 +47,7 @@ async def exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(collections.router, prefix="/api")
+app.include_router(embeddings.router, prefix="/api")
 
 # Include utils router only in non-production environment
 if APP_ENVIRONMENT != "production":

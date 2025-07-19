@@ -6,16 +6,17 @@ from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict
 
 from schemas.common import base_pagination_params
-from settings import DEFAULT_EMBEDDING_MODEL
+from schemas.embedding import EmbeddingModel
 
 
 class CollectionUpdate(BaseModel):
     name: str
-    description: str | None = None
+    description: Union[str, None] = None
 
 
-class CollectionCreate(CollectionUpdate):
-    embedding_model: str = DEFAULT_EMBEDDING_MODEL
+class CollectionCreate(CollectionUpdate, EmbeddingModel):
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class Collection(CollectionCreate):

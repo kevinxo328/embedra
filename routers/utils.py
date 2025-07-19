@@ -4,7 +4,6 @@ from fastapi import APIRouter, UploadFile, status
 from langchain_core.documents import Document
 
 import schemas.common
-import settings
 import utils.doc_processor as doc_processor
 
 router = APIRouter(

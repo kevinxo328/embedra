@@ -2,24 +2,26 @@ import os
 
 from dotenv import load_dotenv
 
-from utils.embeddings import GoogleEmbeddingModel
 from utils.vector_store import PostgresVectorStore
 
 # Load environment variables from .env file
 load_dotenv()
 
-# LLM Provider Keys
+# LLM and Embedding Provider Keys
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
-if not GOOGLE_API_KEY:
-    raise ValueError("GOOGLE_API_KEY must be set in the environment variables")
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+if not GOOGLE_API_KEY and not AZURE_OPENAI_API_KEY and not OPENAI_API_KEY:
+    raise ValueError(
+        "At least one of GOOGLE_API_KEY, AZURE_OPENAI_API_KEY, or OPENAI_API_KEY must be set in the environment variables"
+    )
 
 # Database Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL must be set in the environment variables")
 
-# Embedding Model Configuration
-DEFAULT_EMBEDDING_MODEL = GoogleEmbeddingModel.EMBEDDING_004.name
 
 #  App Configuration
 ALLOWED_ENVIRONMENTS = {"development", "staging", "production"}

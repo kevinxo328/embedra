@@ -1,10 +1,12 @@
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, String, func
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
+
+from schemas.embedding import EmbeddingModelMetadata
 
 if TYPE_CHECKING:
     from .file import File
@@ -32,10 +34,21 @@ class Collection(Base):
     description: Mapped[str] = mapped_column(
         String(255), nullable=True, comment="description of the collection"
     )
+    embedding_model_provider: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="embedding provider used for the collection",
+    )
     embedding_model: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         comment="embedding model used for the collection",
+    )
+    _embedding_model_metadata: Mapped[Optional[dict]] = mapped_column(
+        "embedding_model_metadata",
+        JSONB,
+        nullable=True,
+        comment="metadata for the embedding model used in the collection",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -58,6 +71,35 @@ class Collection(Base):
         cascade="all, delete-orphan",
         single_parent=True,
     )
+
+    @property
+    def embedding_model_metadata(self) -> Optional[EmbeddingModelMetadata]:
+        if self._embedding_model_metadata is None:
+            return None
+        return EmbeddingModelMetadata(**self._embedding_model_metadata)
+
+    @embedding_model_metadata.setter
+    def embedding_model_metadata(self, value: Optional[EmbeddingModelMetadata]):
+        if value is None:
+            self._embedding_model_metadata = None
+        elif isinstance(value, EmbeddingModelMetadata):
+            self._embedding_model_metadata = value.model_dump()
+        elif isinstance(value, dict):
+            self._embedding_model_metadata = EmbeddingModelMetadata(
+                **value
+            ).model_dump()
+        else:
+            raise TypeError("Invalid type for embedding_model_metadata")
+
+    @validates("embedding_model_metadata")
+    def validate_embedding_model_metadata(self, key, value):
+        """
+        Validate the embedding model metadata to ensure that only valid keys are present.
+        """
+        if value is None:
+            return None
+        validated = EmbeddingModelMetadata(**value)
+        return validated.model_dump()
 
     def __repr__(self) -> str:
         return f"<Collection(id={self.id}, name={self.name}, description={self.description})>"

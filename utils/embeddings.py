@@ -1,67 +1,85 @@
 from enum import Enum
+from typing import Union
 
+from langchain_core.embeddings.embeddings import Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
+from pydantic import SecretStr
 
-import settings
+from schemas.embedding import EmbeddingModelMetadata
+from settings import AZURE_OPENAI_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
 
 
-class GoogleEmbeddingModel(Enum):
+class EmbeddingModelProvider(Enum):
     """
-    Enum for Google Embedding Models.
-    Each model has a name, input dimension, and output dimension.
-
-    References:
-    - https://ai.google.dev/gemini-api/docs/models#gemini-embedding
+    Enum for Embedding Model Providers.
+    Each provider has a name and a list of supported models.
     """
 
-    EMBEDDING_004 = (
-        "models/text-embedding-004",
-        2048,
-        768,
-    )
-
-    def __init__(self, name: str, input_dim: int, output_dim: int):
-        self._name = name
-        self._input_dim = input_dim
-        self._output_dim = output_dim
-
-    @property
-    def name(self) -> str:
-        """Return the model name."""
-        return self._name
-
-    @property
-    def input_dim(self) -> int:
-        """Return the input dimension of the model."""
-        return self._input_dim
-
-    @property
-    def output_dim(self) -> int:
-        """Return the output dimension of the model."""
-        return self._output_dim
-
-    @classmethod
-    def from_name(cls, name: str):
-        """
-        Get the embedding model by its name.
-        """
-
-        for model in cls:
-            if model.name == name:
-                return model
-        raise ValueError(f"Model {name} not found in GoogleEmbeddingModel enum.")
+    GOOGLE = "google"
+    AZURE_OPENAI = "azure_openai"
+    OPENAI = "openai"
 
 
-def get_google_embeddings(
-    model_name: str = GoogleEmbeddingModel.EMBEDDING_004.name,
-    task_type: str = "RETRIEVAL_DOCUMENT",
-) -> GoogleGenerativeAIEmbeddings:
-    # Check model should be one of the GoogleEmbeddingModel enum's name
+def get_embedding_model_by_provider_name(
+    provider_name: str,
+    model_name: str,
+    metadata: Union[EmbeddingModelMetadata, None] = None,
+) -> Embeddings:
+    """
+    Get the embedding model provider by its name.
+
+    ### Args:
+    - provider_name: The name of the embedding model provider.
+    - model_name: The name of the model to use.
+    - metadata: Optional metadata for the embedding model.
+
+    ### Returns:
+    An instance of the specified embedding model.
+
+    ### Raises:
+    ValueError: If the provider name is invalid or required parameters are missing.
+    """
     try:
-        GoogleEmbeddingModel.from_name(model_name)
+        provider = EmbeddingModelProvider(provider_name)
     except ValueError:
         raise ValueError(
-            f"Invalid embedding model '{model_name}'. Must be one of {[m.name for m in GoogleEmbeddingModel]}"
+            f"Invalid embedding model provider '{provider_name}'. Must be one of {[p.value for p in EmbeddingModelProvider]}"
         )
 
-    return GoogleGenerativeAIEmbeddings(model=model_name, task_type=task_type)
+    if provider == EmbeddingModelProvider.GOOGLE:
+        if not GOOGLE_API_KEY:
+            raise ValueError("Google API key must be provided for Google embeddings.")
+
+        return GoogleGenerativeAIEmbeddings(
+            model=model_name, google_api_key=SecretStr(GOOGLE_API_KEY)
+        )
+
+    elif provider == EmbeddingModelProvider.AZURE_OPENAI:
+        if not metadata or not metadata.endpoint:
+            raise ValueError("Endpoint must be provided for Azure OpenAI embeddings.")
+        if not AZURE_OPENAI_API_KEY:
+            raise ValueError(
+                "Azure OpenAI API key must be provided for Azure OpenAI embeddings."
+            )
+        return AzureOpenAIEmbeddings(
+            model=model_name,
+            azure_endpoint=metadata.endpoint,
+            dimensions=metadata.dimensions if metadata else None,
+            api_key=SecretStr(AZURE_OPENAI_API_KEY),
+        )
+
+    elif provider == EmbeddingModelProvider.OPENAI:
+        if not OPENAI_API_KEY:
+            raise ValueError("OpenAI API key must be provided for OpenAI embeddings.")
+        return OpenAIEmbeddings(
+            model=model_name,
+            dimensions=metadata.dimensions if metadata else None,
+            api_key=SecretStr(OPENAI_API_KEY),
+            base_url=metadata.endpoint if metadata else None,
+        )
+
+    else:
+        raise ValueError(
+            f"Unsupported embedding model provider '{provider_name}'. Must be one of {[p.value for p in EmbeddingModelProvider]}."
+        )

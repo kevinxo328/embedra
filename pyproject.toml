@@ -21,6 +21,7 @@ greenlet = "^3.2.3"
 markitdown = {extras = ["all"], version = "^0.1.2"}
 pgvector = "^0.4.1"
 colorlog = "^6.9.0"
+langchain-openai = "^0.3.28"
 
 
 [build-system]

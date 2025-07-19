@@ -1,3 +1,4 @@
+import inspect
 from typing import Union
 
 from fastapi import (
@@ -74,21 +75,17 @@ async def get_collection_by_id(
     "/",
     status_code=status.HTTP_201_CREATED,
     response_model=schemas.collection.Collection,
+    description=inspect.getdoc(CollectionService.create_collection),
 )
 async def create_collection(
     collection: schemas.collection.CollectionCreate,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Create a new collection in the database.
-    This will also create a vector table for the collection in the vector store.
-    """
     try:
         return await CollectionService.create_collection(
             collection_data=collection, session=session
         )
-
-    except CollectionServiceException as e:
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
@@ -216,6 +213,17 @@ async def upload_file_to_collection(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Collection with ID {collection_id} not found.",
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
         )
 
 

@@ -4,7 +4,7 @@ from typing import Union
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, String, Table, inspect, select, text
+from sqlalchemy import Column, String, Table, select, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import registry
@@ -48,7 +48,7 @@ class PostgresVectorStore:
         """
         return re.match(r"^[a-zA-Z0-9_]+$", table_name)
 
-    def __create_vector_table_class(self, table_name: str, dimension: int):
+    def __create_vector_table_class(self, table_name: str):
         """
         Create a new vector table class with the specified name and dimension.
         This method is used to dynamically create a table class for vector storage.
@@ -69,7 +69,7 @@ class PostgresVectorStore:
                 nullable=False,
                 comment="text associated with the vector",
             ),
-            Column("embedding", Vector(dimension), nullable=False, comment="vector embedding"),  # type: ignore
+            Column("embedding", Vector(), nullable=False, comment="vector embedding"),  # type: ignore
             Column(
                 "metadata",
                 JSONB,
@@ -99,9 +99,7 @@ class PostgresVectorStore:
 
         return VectorRow
 
-    async def create_vector_table(
-        self, table_name: str, dimension: int, session: AsyncSession
-    ):
+    async def create_vector_table(self, table_name: str, session: AsyncSession):
         if not self.__validate_table_name(table_name):
             raise ValueError(f"Invalid table name: {table_name}")
 
@@ -111,7 +109,7 @@ class PostgresVectorStore:
             return cached
 
         # Create a new table class and cache it
-        vector_row_class = self.__create_vector_table_class(table_name, dimension)
+        vector_row_class = self.__create_vector_table_class(table_name)
 
         def sync_check_create(sync_conn):
             """
@@ -138,28 +136,7 @@ class PostgresVectorStore:
         if cached:
             return cached
 
-        def sync_inspect(sync_conn, embedding_column="embedding"):
-            """
-            Check if the table exists and get its vector dimension.
-            """
-            inspector = inspect(sync_conn)
-            if not inspector.has_table(table_name):
-                raise ValueError(f"Table '{table_name}' does not exist")
-
-            columns = inspector.get_columns(table_name)
-            for col in columns:
-                if col["name"] == embedding_column:
-                    col_type = col["type"]
-                    if isinstance(col_type, Vector):
-                        return col_type.dim
-
-        conn = await session.connection()
-        dimension = await conn.run_sync(sync_inspect)
-
-        if dimension is None:
-            raise ValueError(f"Could not determine dimension for table '{table_name}'")
-
-        return self.__create_vector_table_class(table_name, int(dimension))
+        return self.__create_vector_table_class(table_name)
 
     async def drop_vector_table(
         self,
