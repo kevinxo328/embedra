@@ -1,6 +1,5 @@
 from datetime import datetime
 from typing import Annotated, Literal, Optional, Union
-from uuid import UUID
 
 from fastapi import Depends, Query, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,8 +20,8 @@ class File(FileBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: Union[UUID, str]
-    collection_id: Union[UUID, str]
+    id: str
+    collection_id: str
     path: str
     created_at: datetime
 

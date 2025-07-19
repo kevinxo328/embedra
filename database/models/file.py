@@ -16,8 +16,8 @@ class File(Base):
 
     __tablename__ = "files"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         primary_key=True,
         default=uuid.uuid4,
         comment="unique identifier for the file",
@@ -45,7 +45,7 @@ class File(Base):
     )
 
     # Relationship to collection
-    collection_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("collections.id"))
+    collection_id: Mapped[str] = mapped_column(ForeignKey("collections.id"))
     collection: Mapped["Collection"] = relationship(
         "Collection",
         back_populates="files",

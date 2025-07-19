@@ -1,4 +1,3 @@
-import uuid
 from typing import Union
 
 from langchain_core.documents import Document
@@ -41,9 +40,7 @@ class CollectionService:
     def __init__(self):
         pass
 
-    def __generate_collection_vector_table_name(
-        self, collection_id: Union[uuid.UUID, str]
-    ) -> str:
+    def __generate_collection_vector_table_name(self, collection_id: str) -> str:
         """
         Generate a vector table name for the collection.
         PostgreSQL doesn't allow hyphens in table names, so we replace them with underscores.
@@ -509,7 +506,7 @@ class CollectionService:
     @classmethod
     async def similarity_search(
         cls,
-        collection_id: Union[uuid.UUID, str],
+        collection_id: str,
         query: str,
         session: AsyncSession,
         top_k: int = 5,

@@ -22,8 +22,8 @@ class Collection(Base):
 
     __tablename__ = "collections"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         primary_key=True,
         default=uuid.uuid4,
         comment="unique identifier for the collection",
