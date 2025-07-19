@@ -31,6 +31,12 @@ class CollectionServiceException(Exception):
     pass
 
 
+class CollectionNotFoundException(CollectionServiceException):
+    def __init__(self, collection_id: str):
+        super().__init__(f"Collection with ID {collection_id} not found")
+        self.collection_id = collection_id
+
+
 class CollectionService:
     def __init__(self):
         pass
@@ -97,13 +103,21 @@ class CollectionService:
         session: AsyncSession,
     ):
         """
-        Retrieve all collections from the database.
+        Retrieve collections from the database with optional filtering and pagination.
 
-        Returns:
-            data: A paginated list of collections.
-            total: Total number of collections before pagination.
-            page: Current page number.
-            page_size: Number of items per page.
+        ### Args:
+        - name: Filter collections by name (optional). Uses case-insensitive partial matching.
+        - embedding_model: Filter collections by embedding model name (optional). Uses exact matching.
+        - offset: The number of items to skip for pagination.
+        - limit: The maximum number of items to return per page.
+        - sort_by: The field to sort by (optional). Defaults to **created_at**.
+        - sort_order: The order of sorting (optional). Can be **asc** or **desc**. Defaults to **desc**.
+
+        ### Returns:
+        - data: A paginated list of collections.
+        - total: Total number of collections before pagination.
+        - page: Current page number.
+        - page_size: Number of items per page.
         """
         base_stmt = select(Collection)
 
@@ -146,8 +160,12 @@ class CollectionService:
         """
         Retrieve a specific collection by its ID.
 
-        Raises:
-            NoResultFound: If the collection ID is not found
+        ### Args:
+        - collection_id: The ID of the collection to retrieve.
+        - with_files: If True, also load associated files as well.
+
+        ### Returns:
+        The collection object or none if not found.
         """
         stmt = select(Collection).where(Collection.id == collection_id)
 
@@ -155,7 +173,8 @@ class CollectionService:
             stmt = stmt.options(selectinload(Collection.files))
 
         result = await session.execute(stmt)
-        return result.scalar_one()
+
+        return result.scalar_one_or_none()
 
     @classmethod
     async def create_collection(
@@ -200,11 +219,20 @@ class CollectionService:
         """
         Update an existing collection in the database.
 
-        Raises:
-            NoResultFound: If the collection ID is not found
+        ### Args:
+        - name: The new name of the collection (optional).
+        - description: The new description of the collection (optional).
+
+        ### Returns:
+        The updated collection object.
+
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
 
         collection = await cls.get_collection_by_id(collection_id, session)
+        if not collection:
+            raise CollectionNotFoundException(collection_id)
 
         # Update collection fields
         for key, value in collection_data.model_dump().items():
@@ -228,15 +256,19 @@ class CollectionService:
         for handling the physical file deletion, which helps to avoid orphan files
         while maintaining data consistency and system responsiveness.
 
-        Returns:
-            List of file paths that require deletion to complete cleanup.
+        ### Returns:
+        List of file paths that require deletion to complete cleanup.
 
-        Raises:
-            NoResultFound: If the collection ID is not found
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
         collection = await cls.get_collection_by_id(
             collection_id, session, with_files=True
         )
+
+        if not collection:
+            raise CollectionNotFoundException(collection_id)
+
         instance = cls()
         vector_table_name = instance.__generate_collection_vector_table_name(
             collection.id
@@ -313,8 +345,8 @@ class CollectionService:
         """
         Upload a file to a specific collection.
 
-        Raises:
-            NoResultFound: If the collection ID is not found.
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
         # TODO: Digest the file content and store it in the vector store in the background.
 
@@ -322,6 +354,9 @@ class CollectionService:
         collection = await cls.get_collection_by_id(
             collection_id=collection_id, session=session
         )
+
+        if not collection:
+            raise CollectionNotFoundException(collection_id)
 
         save_file_path = save_file(file)
         new_file = File(
@@ -367,27 +402,30 @@ class CollectionService:
         Delete specific files in a specific collection.
         If `all` is True, delete all files in the collection.
 
-        Args:
-            collection_id (str): The ID of the collection.
-            file_ids (list[str] | None): List of file IDs to delete. If None, no specific files are deleted.
-            all (bool): If True, delete all files in the collection.
+        ### Args:
+        - collection_id (str): The ID of the collection.
+        - file_ids (list[str] | None): List of file IDs to delete. If None, no specific files are deleted.
+        - all (bool): If True, delete all files in the collection.
 
-        Returns:
-            deleted_file_ids (list[str]): List of deleted file IDs.
-            failed_file_ids (list[str]): List of file IDs that were not found in the collection.
-            failed_messages (list[str]): List of error messages for failed deletions.
-            delete_file_paths (list[str]): List of file paths that need to be processed for deletion.
+        ### Returns:
+        - deleted_file_ids (list[str]): List of deleted file IDs.
+        - failed_file_ids (list[str]): List of file IDs that were not found in the collection.
+        - failed_messages (list[str]): List of error messages for failed deletions.
+        - delete_file_paths (list[str]): List of file paths that need to be processed for deletion.
 
 
-        Raises:
-            NoResultFound: If the collection ID is not found.
-            CollectionServiceException: If no files are specified for deletion and `all` is False.
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - CollectionServiceException: If no files are specified for deletion and `all` is False.
         """
 
         # Validate collection ID
         collection = await cls.get_collection_by_id(
             collection_id=collection_id, session=session, with_files=True
         )
+
+        if not collection:
+            raise CollectionNotFoundException(collection_id)
 
         if not file_ids and not all:
             raise CollectionServiceException(
@@ -480,15 +518,19 @@ class CollectionService:
         """
         Perform a similarity search in the specified collection.
 
-        Raises:
-            NoResultFound: If the collection ID is not found.
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
         instance = cls()
-        vector_table_name = instance.__generate_collection_vector_table_name(
-            collection_id
-        )
         collection = await cls.get_collection_by_id(
             collection_id=str(collection_id), session=session
+        )
+
+        if not collection:
+            raise CollectionNotFoundException(str(collection_id))
+
+        vector_table_name = instance.__generate_collection_vector_table_name(
+            collection_id
         )
 
         # Get the embedding model for the collection

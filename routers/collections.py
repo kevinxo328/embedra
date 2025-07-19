@@ -16,7 +16,11 @@ import schemas.collection
 import schemas.common
 import schemas.file
 from database.session import get_db_session
-from services.collection import CollectionService, CollectionServiceException
+from services.collection import (
+    CollectionNotFoundException,
+    CollectionService,
+    CollectionServiceException,
+)
 from utils.file_uploader import delete_file, validate_upload_file
 
 router = APIRouter(
@@ -30,21 +34,13 @@ router = APIRouter(
     "/",
     status_code=status.HTTP_200_OK,
     response_model=schemas.common.PaginatedResponse[schemas.collection.Collection],
+    description=inspect.getdoc(CollectionService.get_collections),
 )
 async def get_collections(
     filter: schemas.collection.CollectionFilter = Depends(),
     pagination: schemas.collection.CollectionPaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
 ):
-    """
-    Retrieve all collections from the database.
-
-    Returns:
-        data: A paginated list of collections.
-        total: Total number of collections before pagination.
-        page: Current page number.
-        page_size: Number of items per page.
-    """
     return await CollectionService.get_collections(
         filter=filter, pagination=pagination, session=session
     )
@@ -59,15 +55,25 @@ async def get_collection_by_id(
     collection_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
-    """Retrieve a specific collection by its ID."""
-    try:
-        return await CollectionService.get_collection_by_id(
-            collection_id=collection_id, session=session
-        )
-    except NoResultFound:
+    """
+    Retrieve a specific collection by its ID.
+
+    ### Args:
+    - collection_id: The ID of the collection to retrieve.
+    - with_files: If True, also load associated files as well.
+
+    ### Returns:
+    The collection object.
+    """
+
+    collection = await CollectionService.get_collection_by_id(
+        collection_id=collection_id, session=session
+    )
+
+    if not collection:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection with ID {collection_id} not found",
+            detail=str(CollectionNotFoundException(collection_id)),
         )
 
 
@@ -109,10 +115,10 @@ async def update_collection(
             collection_data=collection,
             session=session,
         )
-    except NoResultFound:
+    except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection with ID {collection_id} not found",
+            detail=str(e),
         )
 
 
@@ -140,10 +146,10 @@ async def delete_collection(
         for path in paths:
             background_tasks.add_task(delete_file, path)
         return schemas.common.DeleteResponse(deleted_ids=[collection_id])
-    except NoResultFound:
+    except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection with ID {collection_id} not found",
+            detail=str(e),
         )
 
 
@@ -209,10 +215,10 @@ async def upload_file_to_collection(
             session=session,
         )
         return new_file
-    except NoResultFound:
+    except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection with ID {collection_id} not found.",
+            detail=str(e),
         )
 
     except ValueError as e:
@@ -249,11 +255,8 @@ async def delete_files_in_collection(
             session=session,
         )
 
-    except NoResultFound:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection with ID {collection_id} not found",
-        )
+    except CollectionNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except CollectionServiceException as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -287,10 +290,10 @@ async def similarity_search(
             top_k=k,
             threshold=threshold,
         )
-    except NoResultFound:
+    except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Collection with ID {collection_id} not found",
+            detail=str(e),
         )
     except ValueError as e:
         raise HTTPException(
