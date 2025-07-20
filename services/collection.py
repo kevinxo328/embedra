@@ -24,6 +24,7 @@ from utils.embeddings import (
     get_embedding_model_by_provider_name,
 )
 from utils.file_uploader import delete_file, save_file
+from utils.logger import logger
 
 
 class CollectionServiceException(Exception):
@@ -67,9 +68,7 @@ class CollectionService:
     ):
         """Store documents to collection vector store."""
         vector_table_name = self.__generate_collection_vector_table_name(collection_id)
-        VectorModel = await VectorStore.get_vector_model(
-            session=session, table_name=vector_table_name
-        )
+        VectorModel = VectorStore.get_vector_model(table_name=vector_table_name)
 
         if not VectorModel:
             raise ValueError(f"Vector model for collection {collection_id} not found")
@@ -85,7 +84,7 @@ class CollectionService:
             vector_row = VectorModel(
                 text=doc.page_content,
                 embedding=embedding,
-                metadata={
+                meta={
                     **doc.metadata,
                     "collection_id": collection_id,
                     "file_id": file_id,
@@ -382,6 +381,7 @@ class CollectionService:
             )
         except Exception as e:
             delete_file(save_file_path)
+            logger.error(f"Failed to store documents in collection: {e}")
             raise RuntimeError("Failed to store documents in collection") from e
 
         await session.refresh(new_file)
@@ -429,8 +429,7 @@ class CollectionService:
                 "No files specified for deletion. Provide file IDs or set 'all' to True."
             )
 
-        VectorModel = await VectorStore.get_vector_model(
-            session,
+        VectorModel = VectorStore.get_vector_model(
             table_name=cls().__generate_collection_vector_table_name(collection_id),
         )
 

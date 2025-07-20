@@ -4,10 +4,10 @@ from typing import Union
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Column, String, Table, select, text
+from sqlalchemy import String, select, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import registry
+from sqlalchemy.orm import Mapped, mapped_column, registry
 
 
 class LRUCache:
@@ -48,56 +48,37 @@ class PostgresVectorStore:
         """
         return re.match(r"^[a-zA-Z0-9_]+$", table_name)
 
-    def __create_vector_table_class(self, table_name: str):
+    def __create_vector_orm(self, table_name: str):
         """
-        Create a new vector table class with the specified name and dimension.
-        This method is used to dynamically create a table class for vector storage.
+        Create a new vector ORM class with the specified name and dimension.
         """
-        table = Table(
-            table_name,
-            self._metadata,
-            Column(
-                "id",
-                UUID,
+
+        @self._registry.mapped
+        class DynamicVectorOrm:
+            __tablename__ = table_name
+            __table_args__ = {"extend_existing": True}
+            id: Mapped[str] = mapped_column(
+                UUID(as_uuid=False),
                 primary_key=True,
                 default=uuid4,
                 comment="unique identifier for the vector",
-            ),
-            Column(
-                "text",
-                String,
-                nullable=False,
-                comment="text associated with the vector",
-            ),
-            Column("embedding", Vector(), nullable=False, comment="vector embedding"),  # type: ignore
-            Column(
+            )
+            text: Mapped[str] = mapped_column(
+                String, nullable=False, comment="text associated with the vector"
+            )
+            embedding: Mapped[Vector] = mapped_column(
+                Vector(), nullable=False, comment="vector embedding"  # type: ignore
+            )
+            meta: Mapped[Union[dict, None]] = mapped_column(
                 "metadata",
                 JSONB,
                 nullable=True,
                 comment="additional metadata for the vector",
-            ),
-            extend_existing=True,
-        )
+            )
 
-        class VectorRow:
-            def __init__(self, text, embedding, metadata=None):
-                self.text = text
-                self.embedding = embedding
-                self.metadata = metadata
+        self._model_cache.set(table_name, DynamicVectorOrm)
 
-        self._registry.map_imperatively(
-            VectorRow,
-            table,
-            properties={
-                "id": table.c.id,
-                "text": table.c.text,
-                "embedding": table.c.embedding,
-                "metadata": table.c.metadata,
-            },
-        )
-        self._model_cache.set(table_name, VectorRow)
-
-        return VectorRow
+        return DynamicVectorOrm
 
     async def create_vector_table(self, table_name: str, session: AsyncSession):
         if not self.__validate_table_name(table_name):
@@ -109,7 +90,7 @@ class PostgresVectorStore:
             return cached
 
         # Create a new table class and cache it
-        vector_row_class = self.__create_vector_table_class(table_name)
+        vector_row_class = self.__create_vector_orm(table_name)
 
         def sync_check_create(sync_conn):
             """
@@ -125,7 +106,7 @@ class PostgresVectorStore:
         await conn.run_sync(sync_check_create)
         return vector_row_class
 
-    async def get_vector_model(self, session: AsyncSession, table_name: str):
+    def get_vector_model(self, table_name: str):
         """
         Get the vector model for the specified table.
         """
@@ -136,7 +117,7 @@ class PostgresVectorStore:
         if cached:
             return cached
 
-        return self.__create_vector_table_class(table_name)
+        return self.__create_vector_orm(table_name)
 
     async def drop_vector_table(
         self,
@@ -184,7 +165,7 @@ class PostgresVectorStore:
         if not self.__validate_table_name(table_name):
             raise ValueError(f"Invalid table name: {table_name}")
 
-        VectorModel = await self.get_vector_model(session, table_name)
+        VectorModel = self.get_vector_model(table_name)
         if not VectorModel:
             raise ValueError(f"Vector model for table '{table_name}' not found")
 
