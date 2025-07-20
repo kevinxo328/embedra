@@ -1,10 +1,10 @@
-import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from database.db import init_db
+from middlewares.logging_middleware import LoggingMiddleware
 from routers import collections, embeddings
 from settings import APP_ENVIRONMENT
 from utils.logger import logger
@@ -27,38 +27,7 @@ app = FastAPI(
     redoc_url="/api/redoc" if APP_ENVIRONMENT != "production" else None,
 )
 
-
-@app.middleware("http")
-async def middleware(request: Request, call_next):
-    try:
-        req_body = await request.body()
-    except Exception:
-        req_body = None
-
-    start_time = time.perf_counter()
-
-    try:
-        response = await call_next(request)
-    except Exception as e:
-        logger.error(f"Unexpected error occurred during request processing: {e}")
-        raise e
-
-    process_time = time.perf_counter() - start_time
-    method = request.method
-    url = request.url.path
-    query_params = dict(request.query_params)
-
-    logger.info(
-        f"Request processed: Method: {method}, URL: {url}, "
-        f"Query Params: {query_params}, "
-        f"Body: {req_body.decode('utf-8') if req_body else 'N/A'}, "
-        f"Response Status Code: {response.status_code}, "
-        f"Processing Time: {process_time:.4f} seconds"
-    )
-
-    # Add custom headers to the response
-    response.headers["X-Process-Time"] = str(process_time)
-    return response
+app.add_middleware(LoggingMiddleware)
 
 
 @app.exception_handler(Exception)

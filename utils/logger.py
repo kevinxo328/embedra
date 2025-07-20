@@ -9,6 +9,7 @@ import colorlog
 
 
 class JSONFormatter(logging.Formatter):
+
     def format(self, record):
         log_entry = {
             "timestamp": datetime.now(timezone(timedelta(hours=8))).isoformat(),
@@ -21,6 +22,10 @@ class JSONFormatter(logging.Formatter):
             "file": getattr(record, "filename", "unknown"),
             "module": getattr(record, "module", "unknown"),
         }
+        # If the record has a request_id attribute, include it in the log entry
+        request_id = getattr(record, "request_id", None)
+        if request_id is not None:
+            log_entry["request_id"] = request_id
         return json.dumps(log_entry, ensure_ascii=False)
 
 
@@ -46,6 +51,12 @@ class RelativePathFormatter(colorlog.ColoredFormatter):
             record.relpath = os.path.relpath(record.pathname, self.project_root)
         except ValueError:
             record.relpath = record.pathname  # fallback to absolute
+        # 若呼叫端有主動帶入 request_id，則顯示
+        request_id = getattr(record, "request_id", None)
+        if request_id:
+            record.request_id = f"[{str(request_id)[:8]}]"
+        else:
+            record.request_id = ""
         return super().format(record)
 
 
@@ -58,7 +69,7 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 # Stream handler for console output, with string formatting
 stream_handler = logging.StreamHandler()
 stream_formatter = RelativePathFormatter(
-    fmt="%(log_color)s%(levelname)s%(reset)-10s[%(name)s][%(asctime)s]: %(message)s [%(relpath)s:%(lineno)d]",
+    fmt="%(log_color)s%(levelname)s%(reset)-10s[%(name)s]%(request_id)s[%(asctime)s]: %(message)s [%(relpath)s:%(lineno)d]",
     datefmt=DATE_FORMAT,
 )
 stream_handler.setFormatter(stream_formatter)
