@@ -89,8 +89,8 @@ class PostgresVectorStore:
         if cached is not None:
             return cached
 
-        # Create a new table class and cache it
-        vector_row_class = self.__create_vector_orm(table_name)
+        # Create a new vector ORM and cache it
+        VectorOrm = self.__create_vector_orm(table_name)
 
         def sync_check_create(sync_conn):
             """
@@ -104,7 +104,7 @@ class PostgresVectorStore:
 
         conn = await session.connection()
         await conn.run_sync(sync_check_create)
-        return vector_row_class
+        return VectorOrm
 
     def get_vector_model(self, table_name: str):
         """
