@@ -7,6 +7,24 @@ from typing import Literal
 
 import colorlog
 
+from utils.request_context import get_request_id
+
+# Set up a custom log record factory to include request ID in log records
+old_factory = logging.getLogRecordFactory()
+
+
+def new_factory(*args, **kwargs):
+    record = old_factory(*args, **kwargs)
+    record.request_id = get_request_id()
+
+    if not hasattr(record, "request_id"):
+        record.request_id = get_request_id()
+
+    return record
+
+
+logging.setLogRecordFactory(new_factory)
+
 
 class JSONFormatter(logging.Formatter):
 
@@ -82,7 +100,6 @@ file_handler = logging.handlers.TimedRotatingFileHandler(
     log_file, when="midnight", interval=1, backupCount=30, encoding="utf-8", utc=True
 )
 file_handler.setFormatter(JSONFormatter(datefmt=DATE_FORMAT))
-
 
 logger.addHandler(stream_handler)
 logger.addHandler(file_handler)

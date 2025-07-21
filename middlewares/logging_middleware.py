@@ -1,24 +1,12 @@
 import time
 import uuid
-from contextvars import ContextVar
 from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from utils.logger import logger
-
-# Context variable to store request ID across the request lifecycle
-request_id_contextvar: ContextVar[str] = ContextVar("request_id", default="N/A")
-
-
-def get_request_id() -> str:
-    """
-    Get the current request ID from context.
-    Returns:
-        str: The current request ID, or empty string if not available
-    """
-    return request_id_contextvar.get("N/A")
+from utils.request_context import request_id_contextvar
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -53,7 +41,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             logger.error(
                 f"Unexpected error occurred during request processing: {e}",
-                extra={"request_id": get_request_id()},
             )
             raise e
 
@@ -77,7 +64,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             f"Body: {body_str}, "
             f"Response Status Code: {response.status_code}, "
             f"Processing Time: {process_time:.4f} seconds",
-            extra={"request_id": get_request_id()},
         )
 
         response.headers[self.header_name] = request_id
