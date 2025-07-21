@@ -51,12 +51,12 @@ class RelativePathFormatter(colorlog.ColoredFormatter):
             record.relpath = os.path.relpath(record.pathname, self.project_root)
         except ValueError:
             record.relpath = record.pathname  # fallback to absolute
-        # 若呼叫端有主動帶入 request_id，則顯示
+        # Show request ID in the log record if available
         request_id = getattr(record, "request_id", None)
         if request_id:
-            record.request_id = f"[{str(request_id)[:8]}]"
+            record.console_request_id = f"[{str(request_id)[:8]}]"
         else:
-            record.request_id = ""
+            record.console_request_id = ""
         return super().format(record)
 
 
@@ -69,7 +69,7 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 # Stream handler for console output, with string formatting
 stream_handler = logging.StreamHandler()
 stream_formatter = RelativePathFormatter(
-    fmt="%(log_color)s%(levelname)s%(reset)-10s[%(name)s]%(request_id)s[%(asctime)s]: %(message)s [%(relpath)s:%(lineno)d]",
+    fmt="%(log_color)s%(levelname)s%(reset)-10s[%(name)s]%(console_request_id)s[%(asctime)s]: %(message)s [%(relpath)s:%(lineno)d]",
     datefmt=DATE_FORMAT,
 )
 stream_handler.setFormatter(stream_formatter)
