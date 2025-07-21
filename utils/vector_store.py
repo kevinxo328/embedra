@@ -151,7 +151,7 @@ class PostgresVectorStore:
 
         return True
 
-    async def similarity_search(
+    async def consine_similarity_search(
         self,
         session: AsyncSession,
         table_name: str,
@@ -169,23 +169,19 @@ class PostgresVectorStore:
         if not VectorModel:
             raise ValueError(f"Vector model for table '{table_name}' not found")
 
-        def sync_similarity_search(sync_conn):
+        def sync_consine_similarity_search(sync_conn):
             """
             Execute the similarity search query.
             """
+
+            similarity_exp = 1 - VectorModel.embedding.cosine_distance(query_vector)
             stmt = select(
                 VectorModel,
-                (1 - VectorModel.embedding.cosine_distance(query_vector)).label(  # type: ignore
-                    "similarity_score"
-                ),
-            ).order_by(
-                VectorModel.embedding.cosine_distance(query_vector)  # type: ignore
-            )
+                similarity_exp.label("cosine_similarity"),
+            ).order_by(text("cosine_similarity DESC"))
 
             if threshold is not None:
-                stmt = stmt.filter(
-                    VectorModel.embedding.cosine_distance(query_vector) < threshold  # type: ignore
-                )
+                stmt = stmt.filter(similarity_exp >= threshold)
 
             stmt = stmt.limit(top_k)
             result = sync_conn.execute(stmt)
@@ -196,13 +192,12 @@ class PostgresVectorStore:
                     {
                         "id": str(row.id),
                         "text": row.text,
-                        # "embedding": row.embedding.tolist(),
                         "metadata": row.metadata,
-                        "similarity_score": row.similarity_score,
+                        "cosine_similarity": row.cosine_similarity,
                     }
                 )
             return results
 
         conn = await session.connection()
-        results = await conn.run_sync(sync_similarity_search)
+        results = await conn.run_sync(sync_consine_similarity_search)
         return results
