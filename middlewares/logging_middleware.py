@@ -62,10 +62,19 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         url = request.url.path
         query_params = dict(request.query_params)
 
+        # Handle request body logging
+        if req_body:
+            try:
+                body_str = req_body.decode("utf-8")
+            except UnicodeDecodeError:
+                body_str = f"<binary {len(req_body)} bytes>"
+        else:
+            body_str = "N/A"
+
         logger.info(
             f"Request processed: Method: {method}, URL: {url}, "
             f"Query Params: {query_params}, "
-            f"Body: {req_body.decode('utf-8') if req_body else 'N/A'}, "
+            f"Body: {body_str}, "
             f"Response Status Code: {response.status_code}, "
             f"Processing Time: {process_time:.4f} seconds",
             extra={"request_id": get_request_id()},
