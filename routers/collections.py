@@ -270,8 +270,8 @@ async def delete_files_in_collection(
     return result
 
 
-@router.get("/{collection_id}/similariy_search")
-async def similarity_search(
+@router.get("/{collection_id}/cosine_similarity_search")
+async def cosine_similarity_search(
     collection_id: str,
     query: str,
     k: int = 5,
@@ -279,11 +279,10 @@ async def similarity_search(
     session: AsyncSession = Depends(get_db_session),
 ):
     """
-    Perform a similarity search in the specified collection.
-    Returns documents that are similar to the query.
+    Perform a cosine similarity search in the specified collection.
     """
     try:
-        return await CollectionService.similarity_search(
+        return await CollectionService.cosine_similarity_search(
             collection_id=collection_id,
             query=query,
             session=session,

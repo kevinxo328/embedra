@@ -502,7 +502,7 @@ class CollectionService:
         )
 
     @classmethod
-    async def similarity_search(
+    async def cosine_similarity_search(
         cls,
         collection_id: str,
         query: str,
@@ -546,7 +546,7 @@ class CollectionService:
         query_vector = embeddings.embed_query(query)
 
         try:
-            results = await VectorStore.similarity_search(
+            results = await VectorStore.consine_similarity_search(
                 session=session,
                 table_name=vector_table_name,
                 query_vector=query_vector,
