@@ -6,8 +6,6 @@ from fastapi import UploadFile
 from schemas.file import ValidatedUploadFile
 from settings import PROJECT_ROOT_DIR
 
-SAVE_DIR = "docs"
-
 
 def validate_upload_file(file: UploadFile):
     """
@@ -27,8 +25,10 @@ def validate_upload_file(file: UploadFile):
     return cast(ValidatedUploadFile, file)
 
 
-def save_file(file: UploadFile):
-    save_absolute_dir = os.path.join(PROJECT_ROOT_DIR, SAVE_DIR)
+def save_file_to_local(
+    file: UploadFile, save_dir: str = "", root: str = PROJECT_ROOT_DIR
+):
+    save_absolute_dir = os.path.join(root, save_dir)
 
     if not os.path.exists(save_absolute_dir):
         os.makedirs(save_absolute_dir)
@@ -43,9 +43,9 @@ def save_file(file: UploadFile):
     return file_path
 
 
-def delete_file(file_path: str):
+def delete_local_file(file_path: str):
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"File {file_path} does not exist.")
 
     os.remove(file_path)
-    return f"File {file_path} deleted successfully."
+    return True

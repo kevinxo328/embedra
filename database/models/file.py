@@ -23,9 +23,9 @@ class File(Base):
         comment="unique identifier for the file",
     )
     filename: Mapped[str] = mapped_column(
-        String(80), nullable=False, comment="original name of the file", unique=True
+        String(80), nullable=False, comment="original name of the file"
     )
-    filesize: Mapped[int] = mapped_column(
+    size: Mapped[int] = mapped_column(
         Integer, nullable=False, comment="size of the file in bytes"
     )
     content_type: Mapped[str] = mapped_column(
@@ -52,4 +52,4 @@ class File(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<File(id={self.id}, filename={self.filename}, filesize={self.filesize}, content_type={self.content_type})>"
+        return f"<File(id={self.id}, filename={self.filename}, size={self.size}, content_type={self.content_type})>"

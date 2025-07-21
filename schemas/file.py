@@ -24,9 +24,7 @@ class File(FileBase):
     collection_id: str
     path: str
     created_at: datetime
-
-    # TODO: align with database model
-    size: int = Field(..., alias="filesize")
+    size: int
 
 
 class ValidatedUploadFile(UploadFile):

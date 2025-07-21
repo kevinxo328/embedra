@@ -21,7 +21,7 @@ from services.collection import (
     CollectionService,
     CollectionServiceException,
 )
-from utils.file_uploader import delete_file, validate_upload_file
+from utils.file_uploader import delete_local_file, validate_upload_file
 
 router = APIRouter(
     prefix="/collections",
@@ -144,7 +144,7 @@ async def delete_collection(
         # TODO: Handle file deletion in a more robust way. (e.g., Celery task + retry logic)
         # Schedule file deletion in the background
         for path in paths:
-            background_tasks.add_task(delete_file, path)
+            background_tasks.add_task(delete_local_file, path)
         return schemas.common.DeleteResponse(deleted_ids=[collection_id])
     except CollectionNotFoundException as e:
         raise HTTPException(
@@ -265,7 +265,7 @@ async def delete_files_in_collection(
 
     # TODO: Handle file deletion in a more robust way. (e.g., Celery task + retry logic)
     for path in delete_file_paths:
-        background_tasks.add_task(delete_file, path)
+        background_tasks.add_task(delete_local_file, path)
 
     return result
 

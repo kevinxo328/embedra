@@ -23,7 +23,7 @@ from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
 )
-from utils.file_uploader import delete_file, save_file
+from utils.file_uploader import delete_local_file, save_file_to_local
 from utils.logger import logger
 
 
@@ -354,10 +354,10 @@ class CollectionService:
         if not collection:
             raise CollectionNotFoundException(collection_id)
 
-        save_file_path = save_file(file)
+        save_file_path = save_file_to_local(file, save_dir=f"docs/{collection_id}")
         new_file = File(
             filename=file.filename,
-            filesize=file.size,
+            size=file.size,
             path=save_file_path,
             content_type=file.content_type,
             collection_id=collection_id,
@@ -380,7 +380,7 @@ class CollectionService:
                 embedding_model_provider=collection.embedding_model_provider,
             )
         except Exception as e:
-            delete_file(save_file_path)
+            delete_local_file(save_file_path)
             logger.error(f"Failed to store documents in collection: {e}")
             raise RuntimeError("Failed to store documents in collection") from e
 
@@ -448,7 +448,7 @@ class CollectionService:
             )
             if VectorModel:
                 smst = delete(VectorModel).where(
-                    VectorModel.metadata["collection_id"].astext == collection_id  # type: ignore
+                    VectorModel.meta["collection_id"].astext == collection_id  # type: ignore
                 )
                 await session.execute(smst)
 
@@ -471,8 +471,8 @@ class CollectionService:
                         await session.delete(file)
                         if VectorModel:
                             smst = delete(VectorModel).where(
-                                VectorModel.metadata["collection_id"].astext == collection_id,  # type: ignore
-                                VectorModel.metadata["file_id"].astext == file_id,  # type: ignore
+                                VectorModel.meta["collection_id"].astext == collection_id,  # type: ignore
+                                VectorModel.meta["file_id"].astext == file_id,  # type: ignore
                             )
                             await session.execute(smst)
 
