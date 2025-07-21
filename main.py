@@ -6,8 +6,7 @@ from fastapi.responses import JSONResponse
 from database.db import init_db
 from middlewares.logging_middleware import LoggingMiddleware
 from routers import collections, embeddings
-from settings import APP_ENVIRONMENT
-from utils.logger import logger
+from settings import APP_ENVIRONMENT, logger, request_context
 
 
 @asynccontextmanager
@@ -27,7 +26,8 @@ app = FastAPI(
     redoc_url="/api/redoc" if APP_ENVIRONMENT != "production" else None,
 )
 
-app.add_middleware(LoggingMiddleware)
+
+app.add_middleware(LoggingMiddleware, context=request_context, logger=logger)
 
 
 @app.exception_handler(Exception)

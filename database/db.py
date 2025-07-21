@@ -2,8 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from database.models.base import Base
-from settings import DATABASE_URL
-from utils.logger import logger
+from settings import DATABASE_URL, logger
 
 
 async def init_db():

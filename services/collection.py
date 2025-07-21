@@ -17,14 +17,13 @@ from schemas.collection import (
 from schemas.common import DeleteResponse, PaginatedResponse
 from schemas.embedding import EmbeddingModelMetadata
 from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
-from settings import VectorStore
+from settings import VectorStore, logger
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
 )
 from utils.file_uploader import delete_local_file, save_file_to_local
-from utils.logger import logger
 
 
 class CollectionServiceException(Exception):

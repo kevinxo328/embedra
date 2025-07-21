@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from typing import Callable
@@ -5,8 +6,7 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from utils.logger import logger
-from utils.request_context import request_id_contextvar
+from utils.request_context import RequestContext
 
 
 class LoggingMiddleware(BaseHTTPMiddleware):
@@ -15,11 +15,20 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     logs request/response info, and adds request ID to response headers.
     """
 
-    def __init__(self, app, header_name: str = "X-Request-ID"):
+    def __init__(
+        self,
+        app,
+        context: RequestContext,
+        logger: logging.Logger,
+        header_name: str = "X-Request-ID",
+    ):
         super().__init__(app)
         self.header_name = header_name
+        self.context = context
+        self.logger = logger
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
+        # Generate a unique request ID if not provided in headers
         request_id = request.headers.get(
             self.header_name.lower()
         ) or request.headers.get(self.header_name)
@@ -27,8 +36,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         if not request_id:
             request_id = str(uuid.uuid4())
 
+        self.context.reset()
         # Store request ID in context variable for use in logging
-        token = request_id_contextvar.set(request_id)
+        self.context.set_request_id(request_id)
 
         start_time = time.perf_counter()
         try:
@@ -39,7 +49,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception as e:
-            logger.error(
+            self.logger.error(
                 f"Unexpected error occurred during request processing: {e}",
             )
             raise e
@@ -58,7 +68,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         else:
             body_str = "N/A"
 
-        logger.info(
+        self.logger.info(
             f"Request processed: Method: {method}, URL: {url}, "
             f"Query Params: {query_params}, "
             f"Body: {body_str}, "
@@ -69,5 +79,5 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         response.headers[self.header_name] = request_id
         response.headers["X-Process-Time"] = str(process_time)
 
-        request_id_contextvar.reset(token)
+        self.context.reset()
         return response

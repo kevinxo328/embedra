@@ -2,6 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
+from utils.logger import initialize_logger
+from utils.request_context import RequestContext
 from utils.vector_store import PostgresVectorStore
 
 # Load environment variables from .env file
@@ -34,3 +36,10 @@ if APP_ENVIRONMENT not in ALLOWED_ENVIRONMENTS:
 PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 VectorStore = PostgresVectorStore()
+
+# Initialize request context for logging
+request_context = RequestContext()
+logger = initialize_logger(
+    context=request_context,
+    level="INFO" if APP_ENVIRONMENT != "production" else "WARNING",
+)
