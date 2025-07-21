@@ -6,19 +6,22 @@ authors = ["Kevin Liu <kevinxo328@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10,<3.14"
 fastapi = {extras = ["standard"], version = "^0.116.0"}
 langgraph = "^0.5.1"
 langchain = "^0.3.26"
 langchain-google-genai = "^2.1.6"
 python-dotenv = "^1.1.1"
 langchain-community = "^0.3.27"
-pypdf = "^5.7.0"
 python-multipart = "^0.0.20"
 tenacity = "^9.1.2"
 alembic = "^1.16.3"
 psycopg = {extras = ["binary"], version = "^3.2.9"}
 greenlet = "^3.2.3"
+markitdown = {extras = ["all"], version = "^0.1.2"}
+pgvector = "^0.4.1"
+colorlog = "^6.9.0"
+langchain-openai = "^0.3.28"
 
 
 [build-system]
