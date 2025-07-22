@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "agentic-ai"
+name = "embedra"
 version = "0.1.0"
 description = ""
 authors = ["Kevin Liu <kevinxo328@gmail.com>"]

@@ -35,6 +35,10 @@ class LRUCache:
         self._cache.clear()
 
 
+# TODO: Implement similarity search and hybrid search
+# TODO: Add logging for vector store operations
+
+
 class PostgresVectorStore:
     def __init__(self, max_cache_size: int = 512):
         self._registry = registry()
