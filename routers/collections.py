@@ -41,8 +41,8 @@ async def get_collections(
     pagination: schemas.collection.CollectionPaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
 ):
-    return await CollectionService.get_collections(
-        filter=filter, pagination=pagination, session=session
+    return await CollectionService(session).get_collections(
+        filter=filter, pagination=pagination
     )
 
 
@@ -60,21 +60,20 @@ async def get_collection_by_id(
 
     ### Args:
     - collection_id: The ID of the collection to retrieve.
-    - with_files: If True, also load associated files as well.
 
     ### Returns:
     The collection object.
     """
 
-    collection = await CollectionService.get_collection_by_id(
-        collection_id=collection_id, session=session
-    )
+    collection = await CollectionService(session).get_collection_by_id(collection_id)
 
     if not collection:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(CollectionNotFoundException(collection_id)),
         )
+
+    return collection
 
 
 @router.post(
@@ -88,9 +87,7 @@ async def create_collection(
     session: AsyncSession = Depends(get_db_session),
 ):
     try:
-        return await CollectionService.create_collection(
-            collection_data=collection, session=session
-        )
+        return await CollectionService(session).create_collection(data=collection)
     except CollectionServiceException as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,10 +107,8 @@ async def update_collection(
 ):
     """Update an existing collection by its ID."""
     try:
-        return await CollectionService.update_collection(
-            collection_id=collection_id,
-            collection_data=collection,
-            session=session,
+        return await CollectionService(session).update_collection(
+            id=collection_id, data=collection
         )
     except CollectionNotFoundException as e:
         raise HTTPException(
@@ -127,8 +122,8 @@ async def update_collection(
     status_code=status.HTTP_200_OK,
     response_model=schemas.common.DeleteResponse,
 )
-async def delete_collection(
-    collection_id: str,
+async def delete_collection_by_id(
+    id: str,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -137,15 +132,13 @@ async def delete_collection(
     This will also drop the vector table associated with the collection.
     """
     try:
-        paths = await CollectionService.delete_collection(
-            collection_id=collection_id, session=session
-        )
+        paths = await CollectionService(session).delete_collection_by_id(id)
 
         # TODO: Handle file deletion in a more robust way. (e.g., Celery task + retry logic)
         # Schedule file deletion in the background
         for path in paths:
             background_tasks.add_task(delete_local_file, path)
-        return schemas.common.DeleteResponse(deleted_ids=[collection_id])
+        return schemas.common.DeleteResponse(deleted_ids=[id])
     except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -174,8 +167,8 @@ async def get_collection_files(
            page_size: Number of items per page.
     """
     try:
-        return await CollectionService.get_collection_files(
-            collection_id, filter, pagination, session
+        return await CollectionService(session).get_collection_files(
+            collection_id, filter, pagination
         )
     except NoResultFound:
         raise HTTPException(
@@ -209,12 +202,11 @@ async def upload_file_to_collection(
         )
 
     try:
-        new_file = await CollectionService.upload_file_to_collection(
+        return await CollectionService(session).upload_file_to_collection(
             collection_id=collection_id,
             file=validated_file,
-            session=session,
         )
-        return new_file
+
     except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -248,11 +240,12 @@ async def delete_files_in_collection(
     Delete specific files in a specific collection.
     """
     try:
-        result, delete_file_paths = await CollectionService.delete_collection_files(
+        result, delete_file_paths = await CollectionService(
+            session
+        ).delete_collection_files(
             collection_id=collection_id,
             file_ids=request.ids,
             all=request.all,
-            session=session,
         )
 
     except CollectionNotFoundException as e:
@@ -282,10 +275,9 @@ async def cosine_similarity_search(
     Perform a cosine similarity search in the specified collection.
     """
     try:
-        return await CollectionService.cosine_similarity_search(
+        return await CollectionService(session).cosine_similarity_search(
             collection_id=collection_id,
             query=query,
-            session=session,
             top_k=k,
             threshold=threshold,
         )

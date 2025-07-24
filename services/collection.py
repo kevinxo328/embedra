@@ -1,13 +1,14 @@
 from typing import Union
 
-from sqlalchemy import delete, func, select
-from sqlalchemy.exc import NoResultFound, SQLAlchemyError
+from sqlalchemy import delete
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from celery_tasks import process_file
 from database.models.collection import Collection
 from database.models.file import File
+from database.repositories.collection import CollectionRepository
+from database.repositories.file import FileRepository
 from schemas.collection import (
     CollectionCreate,
     CollectionFilter,
@@ -35,8 +36,10 @@ class CollectionNotFoundException(CollectionServiceException):
 
 
 class CollectionService:
-    def __init__(self):
-        pass
+    def __init__(self, session: AsyncSession):
+        self.session = session
+        self.collection_repository = CollectionRepository(session)
+        self.file_repository = FileRepository(session)
 
     def __create_vector_table_name(self, collection_id: str) -> str:
         """
@@ -46,11 +49,22 @@ class CollectionService:
 
         return f"collection_{str(collection_id).replace('-', '_')}"
 
-    @staticmethod
+    async def __validate_collection_exists(
+        self, collection_id: str, with_files: bool = False
+    ):
+        """
+        Validate if a collection exists by its ID.
+        Raises CollectionNotFoundException if not found.
+        """
+        collection = await self.collection_repository.get_by_id(
+            id=collection_id, with_files=with_files
+        )
+        if not collection:
+            raise CollectionNotFoundException(collection_id)
+        return collection
+
     async def get_collections(
-        filter: CollectionFilter,
-        pagination: CollectionPaginationParams,
-        session: AsyncSession,
+        self, filter: CollectionFilter, pagination: CollectionPaginationParams
     ):
         """
         Retrieve collections from the database with optional filtering and pagination.
@@ -69,33 +83,16 @@ class CollectionService:
         - page: Current page number.
         - page_size: Number of items per page.
         """
-        base_stmt = select(Collection)
 
-        # Apply filtering
-        if filter.name:
-            base_stmt = base_stmt.where(Collection.name.ilike(f"%{filter.name}%"))
+        collections, total = await self.collection_repository.get(
+            name=filter.name,
+            embedding_model=filter.embedding_model,
+            limit=pagination.limit,
+            offset=pagination.offset,
+            sort_by=pagination.sort_by,
+            sort_order=pagination.sort_order,
+        )
 
-        if filter.embedding_model:
-            base_stmt = base_stmt.where(
-                Collection.embedding_model == filter.embedding_model
-            )
-
-        # Count total items
-        total_stmt = select(func.count()).select_from(base_stmt.subquery())
-        total_result = await session.execute(total_stmt)
-        total = total_result.scalar_one()
-
-        # Apply pagination
-        stmt = base_stmt
-        if pagination.sort_by:
-            if pagination.sort_order == "asc":
-                stmt = stmt.order_by(getattr(Collection, pagination.sort_by).asc())
-            else:
-                stmt = stmt.order_by(getattr(Collection, pagination.sort_by).desc())
-        stmt = stmt.offset(pagination.offset).limit(pagination.limit)
-
-        result = await session.execute(stmt)
-        collections = result.scalars().all()
         return PaginatedResponse(
             data=collections,
             total=total,
@@ -103,10 +100,7 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    @staticmethod
-    async def get_collection_by_id(
-        collection_id: str, session: AsyncSession, with_files: bool = False
-    ):
+    async def get_collection_by_id(self, id: str, with_files: bool = False):
         """
         Retrieve a specific collection by its ID.
 
@@ -117,19 +111,9 @@ class CollectionService:
         ### Returns:
         The collection object or none if not found.
         """
-        stmt = select(Collection).where(Collection.id == collection_id)
+        return await self.collection_repository.get_by_id(id=id, with_files=with_files)
 
-        if with_files:
-            stmt = stmt.options(selectinload(Collection.files))
-
-        result = await session.execute(stmt)
-
-        return result.scalar_one_or_none()
-
-    @classmethod
-    async def create_collection(
-        cls, collection_data: CollectionCreate, session: AsyncSession
-    ):
+    async def create_collection(self, data: CollectionCreate):
         """
         Create a new collection.
         This will also create a vector table for the collection in the vector store.
@@ -143,34 +127,29 @@ class CollectionService:
         """
         # Validate the embedding model provider
         try:
-            EmbeddingModelProvider(collection_data.embedding_model_provider)
+            EmbeddingModelProvider(data.embedding_model_provider)
         except ValueError:
             raise CollectionServiceException(
-                f"Invalid embedding model provider '{collection_data.embedding_model_provider}'. Only supported providers are: {', '.join(EmbeddingModelProvider._member_names_)}"
+                f"Invalid embedding model provider '{data.embedding_model_provider}'. Only supported providers are: {', '.join(e.value for e in EmbeddingModelProvider)}"
             )
 
-        collection = Collection(**collection_data.model_dump())
-        session.add(collection)
-        await session.flush()  # Ensure the collection ID is generated
+        collection = Collection(**data.model_dump())
+
+        await self.collection_repository.stage_create(collection)
+        await self.session.flush()  # Ensure the collection ID is generated
 
         # Create a vector table for the new collection
-        vector_table_name = cls().__create_vector_table_name(collection.id)
+        vector_table_name = self.__create_vector_table_name(collection.id)
         await VectorStore.create_vector_table(
             vector_table_name,
-            session,
+            self.session,
         )
 
         # Refresh the collection to apply ORM mappings
-        await session.refresh(collection)
+        await self.session.refresh(collection)
         return collection
 
-    @classmethod
-    async def update_collection(
-        cls,
-        collection_id: str,
-        collection_data: CollectionUpdate,
-        session: AsyncSession,
-    ):
+    async def update_collection(self, id: str, data: CollectionUpdate):
         """
         Update an existing collection in the database.
 
@@ -184,22 +163,20 @@ class CollectionService:
         ### Raises:
         - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
-
-        collection = await cls.get_collection_by_id(collection_id, session)
-        if not collection:
-            raise CollectionNotFoundException(collection_id)
+        collection = await self.__validate_collection_exists(id)
 
         # Update collection fields
-        for key, value in collection_data.model_dump().items():
+        for key, value in data.model_dump().items():
             if value is not None:
                 setattr(collection, key, value)
 
-        await session.refresh(collection)
+        await self.collection_repository.stage_update(collection)
+
+        await self.session.refresh(collection)
         return collection
 
     # TODO: Need to check if any files are processing in celery before deleting the collection.
-    @classmethod
-    async def delete_collection(cls, collection_id: str, session: AsyncSession):
+    async def delete_collection_by_id(self, id: str):
         """
         Delete a collection and its associated vector table.
         Files deletion is not critical for data consistency, but should be done to avoid orphan files.
@@ -218,30 +195,19 @@ class CollectionService:
         ### Raises:
         - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
-        collection = await cls.get_collection_by_id(
-            collection_id, session, with_files=True
-        )
-
-        if not collection:
-            raise CollectionNotFoundException(collection_id)
-
-        vector_table_name = cls().__create_vector_table_name(collection.id)
+        collection = await self.__validate_collection_exists(id)
+        vector_table_name = self.__create_vector_table_name(collection.id)
 
         # Store file paths before deletion for cleanup
         file_paths = [file.path for file in collection.files]
 
-        await session.delete(collection)
-        await VectorStore.drop_vector_table(vector_table_name, session)
+        await self.collection_repository.stage_delete(collection)
+        await VectorStore.drop_vector_table(vector_table_name, self.session)
 
         return file_paths
 
-    @classmethod
     async def get_collection_files(
-        cls,
-        collection_id: str,
-        filter: FileFilter,
-        pagination: FilePaginationParams,
-        session: AsyncSession,
+        self, collection_id: str, filter: FileFilter, pagination: FilePaginationParams
     ):
         """
         Retrieve files associated with a specific collection.
@@ -255,35 +221,18 @@ class CollectionService:
         Raises:
             NoResultFound: If the collection ID is not found
         """
-        # Validate collection ID
-        await cls.get_collection_by_id(collection_id, session)
+        await self.__validate_collection_exists(collection_id)
 
-        # Build the query
-        base_stmt = select(File).where(File.collection_id == collection_id)
+        files, total = await self.file_repository.get(
+            collection_id=collection_id,
+            filename=filter.filename,
+            content_type=filter.content_type,
+            limit=pagination.limit,
+            offset=pagination.offset,
+            sort_by=pagination.sort_by,
+            sort_order=pagination.sort_order,
+        )
 
-        # Apply filtering
-        if filter.filename:
-            base_stmt = base_stmt.where(File.filename.ilike(f"%{filter.filename}%"))
-
-        if filter.content_type:
-            base_stmt = base_stmt.where(File.content_type == filter.content_type)
-
-        # Count total items
-        total_stmt = select(func.count()).select_from(base_stmt.subquery())
-        total_result = await session.execute(total_stmt)
-        total = total_result.scalar_one()
-
-        # Apply pagination
-        stmt = base_stmt
-        if pagination.sort_by:
-            if pagination.sort_order == "asc":
-                stmt = stmt.order_by(getattr(File, pagination.sort_by).asc())
-            else:
-                stmt = stmt.order_by(getattr(File, pagination.sort_by).desc())
-        stmt = stmt.offset(pagination.offset).limit(pagination.limit)
-
-        result = await session.execute(stmt)
-        files = result.scalars().all()
         return PaginatedResponse(
             data=files,
             total=total,
@@ -291,9 +240,8 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    @classmethod
     async def upload_file_to_collection(
-        cls, collection_id: str, file: ValidatedUploadFile, session: AsyncSession
+        self, collection_id: str, file: ValidatedUploadFile
     ):
         """
         Upload a file to a specific collection.
@@ -303,16 +251,9 @@ class CollectionService:
         """
         # TODO: Digest the file content and store it in the vector store in the background.
 
-        # Check if the collection exists using the private method
-        collection = await cls.get_collection_by_id(
-            collection_id=collection_id, session=session
-        )
-
-        if not collection:
-            raise CollectionNotFoundException(collection_id)
+        await self.__validate_collection_exists(collection_id)
 
         try:
-
             save_file_path = save_file_to_local(file, save_dir=f"docs/{collection_id}")
             new_file = File(
                 filename=file.filename,
@@ -321,11 +262,11 @@ class CollectionService:
                 content_type=file.content_type,
                 collection_id=collection_id,
             )
-            session.add(new_file)
-            await session.flush()
+            await self.file_repository.stage_create(new_file)
+            await self.session.flush()
 
             # Process the file in the background using Celery
-            table_name = cls().__create_vector_table_name(collection_id)
+            table_name = self.__create_vector_table_name(collection_id)
             process_file.apply_async(
                 kwargs={"file_id": new_file.id, "table_name": table_name}
             )
@@ -334,17 +275,12 @@ class CollectionService:
             delete_local_file(save_file_path)
 
         # Refresh the new file to apply ORM mappings
-        await session.refresh(new_file)
+        await self.session.refresh(new_file)
         return new_file
 
     # TODO: Need to check if any files are processing in celery before deleting the collection.
-    @classmethod
     async def delete_collection_files(
-        cls,
-        collection_id: str,
-        file_ids: Union[list[str], None],
-        all: bool,
-        session: AsyncSession,
+        self, collection_id: str, file_ids: Union[list[str], None], all: bool
     ):
         """
         Delete specific files in a specific collection.
@@ -368,12 +304,9 @@ class CollectionService:
         """
 
         # Validate collection ID
-        collection = await cls.get_collection_by_id(
-            collection_id=collection_id, session=session, with_files=True
+        collection = await self.__validate_collection_exists(
+            collection_id=collection_id, with_files=True
         )
-
-        if not collection:
-            raise CollectionNotFoundException(collection_id)
 
         if not file_ids and not all:
             raise CollectionServiceException(
@@ -381,7 +314,7 @@ class CollectionService:
             )
 
         VectorOrm = VectorStore.get_orm(
-            table_name=cls().__create_vector_table_name(collection_id),
+            table_name=self.__create_vector_table_name(collection_id),
         )
 
         deleted_file_ids = []
@@ -394,46 +327,41 @@ class CollectionService:
             deleted_file_ids = [str(file.id) for file in collection.files]
 
             # Delete all files in the collection and their vectors
-            await session.execute(
-                delete(File).where(File.collection_id == collection_id)
-            )
+            await self.file_repository.stage_delete_by_collection_id(collection_id)
             if VectorOrm:
                 smst = delete(VectorOrm)
-                await session.execute(smst)
+                await self.session.execute(smst)
 
         elif file_ids:
             for file_id in file_ids:
+
                 # Begin a nested transaction to ensure atomicity
                 # This allows us to rollback only the current file deletion if it fails
                 # while keeping the session open for other operations.
-
                 try:
-                    async with session.begin_nested():
-                        file_result = await session.execute(
-                            select(File).where(
-                                File.id == file_id, File.collection_id == collection_id
-                            )
-                        )
-                        file = file_result.scalar_one()
+                    async with self.session.begin_nested():
+                        file = await self.file_repository.get_by_id(id=file_id)
 
-                        # Delete the file and its associated vectors
-                        await session.delete(file)
-                        if VectorOrm:
-                            smst = delete(VectorOrm).where(
-                                VectorOrm.file_id == file_id,  # type: ignore
-                            )
-                            await session.execute(smst)
+                        if file:
+                            await self.file_repository.stage_delete(file)
 
-                        delete_file_paths.append(file.path)
-                        deleted_file_ids.append(file_id)
+                            if VectorOrm:
+                                smst = delete(VectorOrm).where(
+                                    VectorOrm.file_id == file_id,  # type: ignore
+                                )
+                                await self.session.execute(smst)
+
+                            delete_file_paths.append(file.path)
+                            deleted_file_ids.append(file_id)
+                        else:
+                            failed_file_ids.append(file_id)
+                            failed_messages.append(
+                                f"File with ID {file_id} not found in collection {collection_id}."
+                            )
 
                 except Exception as e:
                     failed_file_ids.append(file_id)
-                    if isinstance(e, NoResultFound):
-                        failed_messages.append(
-                            f"File with ID {file_id} not found in collection {collection_id}."
-                        )
-                    elif isinstance(e, SQLAlchemyError):
+                    if isinstance(e, SQLAlchemyError):
                         failed_messages.append(
                             f"Database error while deleting file with ID {file_id} in collection {collection_id}: {str(e)}"
                         )
@@ -450,12 +378,10 @@ class CollectionService:
             delete_file_paths,
         )
 
-    @classmethod
     async def cosine_similarity_search(
-        cls,
+        self,
         collection_id: str,
         query: str,
-        session: AsyncSession,
         top_k: int = 5,
         threshold: Union[float, None] = None,
     ):
@@ -465,14 +391,8 @@ class CollectionService:
         ### Raises:
         - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
-        collection = await cls.get_collection_by_id(
-            collection_id=str(collection_id), session=session
-        )
-
-        if not collection:
-            raise CollectionNotFoundException(str(collection_id))
-
-        vector_table_name = cls().__create_vector_table_name(collection_id)
+        collection = await self.__validate_collection_exists(collection_id)
+        vector_table_name = self.__create_vector_table_name(collection_id)
 
         # Get the embedding model for the collection
         embedding_model = collection.embedding_model
@@ -493,7 +413,7 @@ class CollectionService:
 
         try:
             results = await VectorStore.consine_similarity_search(
-                session=session,
+                session=self.session,
                 table_name=vector_table_name,
                 query_vector=query_vector,
                 top_k=top_k,
