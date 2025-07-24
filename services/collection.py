@@ -38,9 +38,9 @@ class CollectionService:
     def __init__(self):
         pass
 
-    def __generate_collection_vector_table_name(self, collection_id: str) -> str:
+    def __create_vector_table_name(self, collection_id: str) -> str:
         """
-        Generate a vector table name for the collection.
+        Create a vector table name for the collection.
         PostgreSQL doesn't allow hyphens in table names, so we replace them with underscores.
         """
 
@@ -155,9 +155,7 @@ class CollectionService:
 
         # Create a vector table for the new collection
         instance = cls()
-        vector_table_name = instance.__generate_collection_vector_table_name(
-            collection.id
-        )
+        vector_table_name = instance.__create_vector_table_name(collection.id)
         await VectorStore.create_vector_table(
             vector_table_name,
             session,
@@ -229,9 +227,7 @@ class CollectionService:
             raise CollectionNotFoundException(collection_id)
 
         instance = cls()
-        vector_table_name = instance.__generate_collection_vector_table_name(
-            collection.id
-        )
+        vector_table_name = instance.__create_vector_table_name(collection.id)
 
         # Store file paths before deletion for cleanup
         file_paths = [file.path for file in collection.files]
@@ -332,7 +328,7 @@ class CollectionService:
 
             # Process the file in the background using Celery
             instance = cls()
-            table_name = instance.__generate_collection_vector_table_name(collection_id)
+            table_name = instance.__create_vector_table_name(collection_id)
             process_file.apply_async(
                 kwargs={"file_id": new_file.id, "table_name": table_name}
             )
@@ -388,7 +384,7 @@ class CollectionService:
             )
 
         VectorModel = VectorStore.get_vector_model(
-            table_name=cls().__generate_collection_vector_table_name(collection_id),
+            table_name=cls().__create_vector_table_name(collection_id),
         )
 
         deleted_file_ids = []
@@ -480,9 +476,7 @@ class CollectionService:
         if not collection:
             raise CollectionNotFoundException(str(collection_id))
 
-        vector_table_name = instance.__generate_collection_vector_table_name(
-            collection_id
-        )
+        vector_table_name = instance.__create_vector_table_name(collection_id)
 
         # Get the embedding model for the collection
         embedding_model = collection.embedding_model
