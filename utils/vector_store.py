@@ -1,7 +1,6 @@
 import re
-from collections import OrderedDict
 from enum import Enum
-from typing import Any, Generic, TypeVar, Union
+from typing import Union
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -9,33 +8,6 @@ from sqlalchemy import String, select, text
 from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, registry
-
-T = TypeVar("T")
-
-
-class LRUCache(Generic[T]):
-    def __init__(self, max_size: int = 512):
-        self.max_size = max_size
-        self._cache: OrderedDict[str, T] = OrderedDict()
-
-    def get(self, key: str):
-        if key in self._cache:
-            self._cache.move_to_end(key)
-            return self._cache[key]
-        return None
-
-    def set(self, key: str, value: T):
-        if key in self._cache:
-            self._cache.move_to_end(key)
-        self._cache[key] = value
-        if len(self._cache) > self.max_size:
-            self._cache.popitem(last=False)
-
-    def drop(self, key: str):
-        self._cache.pop(key, None)
-
-    def clear(self):
-        self._cache.clear()
 
 
 class DocumentEmbeddingStatus(Enum):
@@ -51,10 +23,9 @@ class DocumentEmbeddingStatus(Enum):
 # TODO: Implement similarity search and hybrid search
 # TODO: Add logging for vector store operations
 class PostgresVectorStore:
-    def __init__(self, max_cache_size: int = 512):
+    def __init__(self):
         self._registry = registry()
         self._metadata = self._registry.metadata
-        self._model_cache: LRUCache[Any] = LRUCache(max_cache_size)
 
     def __validate_table_name(self, table_name: str):
         """
@@ -107,8 +78,6 @@ class PostgresVectorStore:
                 comment="additional metadata for the document",
             )
 
-        self._model_cache.set(table_name, DynamicOrm)
-
         return DynamicOrm
 
     def get_orm(self, table_name: str):
@@ -117,20 +86,10 @@ class PostgresVectorStore:
         """
         self.__validate_table_name(table_name)
 
-        cached = self._model_cache.get(table_name)
-        if cached:
-            return cached
-
         return self.__create_orm(table_name)
 
     async def create_vector_table(self, table_name: str, session: AsyncSession):
         self.__validate_table_name(table_name)
-
-        # Check if the table already exists in the cache
-        cached = self._model_cache.get(table_name)
-        if cached is not None:
-            return cached
-
         # Create a new vector ORM and cache it
         VectorOrm = self.__create_orm(table_name)
 
@@ -157,11 +116,6 @@ class PostgresVectorStore:
         Drop the vector table with the specified name.
         """
         self.__validate_table_name(table_name)
-
-        # Remove from cache first
-        cached = self._model_cache.get(table_name)
-        if cached:
-            self._model_cache.drop(table_name)
 
         def sync_drop_table(sync_conn):
             # Check if table exists before trying to drop
