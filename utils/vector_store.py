@@ -134,7 +134,7 @@ class PostgresVectorStore:
         await conn.run_sync(sync_check_create)
         return VectorOrm
 
-    def get_vector_model(self, table_name: str):
+    def get_orm(self, table_name: str):
         """
         Get the vector model for the specified table.
         """
@@ -190,8 +190,8 @@ class PostgresVectorStore:
         """
         self.__validate_table_name(table_name)
 
-        VectorModel = self.get_vector_model(table_name)
-        if not VectorModel:
+        VectorOrm = self.get_orm(table_name)
+        if not VectorOrm:
             raise ValueError(f"Vector model for table '{table_name}' not found")
 
         def sync_consine_similarity_search(sync_conn):
@@ -199,9 +199,9 @@ class PostgresVectorStore:
             Execute the similarity search query.
             """
 
-            similarity_exp = 1 - VectorModel.embedding.cosine_distance(query_vector)
+            similarity_exp = 1 - VectorOrm.embedding.cosine_distance(query_vector)
             stmt = select(
-                VectorModel,
+                VectorOrm,
                 similarity_exp.label("cosine_similarity"),
             ).order_by(text("cosine_similarity DESC"))
 

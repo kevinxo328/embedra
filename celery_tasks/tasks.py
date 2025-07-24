@@ -20,7 +20,7 @@ def check_file_status(file_id: str, table_name: str):
 
     with Session() as session:
         file = session.query(File).filter(File.id == file_id).one()
-        VectorOrm = VectorStore.get_vector_model(table_name=table_name)
+        VectorOrm = VectorStore.get_orm(table_name=table_name)
         docs = session.query(VectorOrm).filter(VectorOrm.file_id == file_id).all()
 
         new_status = FileStatus.EMBEDDING
@@ -44,7 +44,7 @@ def embed_doc(
     Embed a document using the specified provider and model.
     """
 
-    VectorOrm = VectorStore.get_vector_model(table_name=table_name)
+    VectorOrm = VectorStore.get_orm(table_name=table_name)
 
     if not VectorOrm:
         raise ValueError(f"Vector model for table '{table_name}' not found")
@@ -81,7 +81,7 @@ def embed_doc(
 
 @app.task(name="tasks.embed_documents")
 def embed_documents(file_id: str, table_name: str):
-    VectorOrm = VectorStore.get_vector_model(table_name=table_name)
+    VectorOrm = VectorStore.get_orm(table_name=table_name)
 
     if not VectorOrm:
         raise ValueError(f"Vector model for table '{table_name}' not found")
@@ -113,7 +113,7 @@ def extract_file(file_id: str, table_name: str):
             result = markitdown_converter(source=file.path)
             docs = split_markdown(result.markdown)
 
-            VectorOrm = VectorStore.get_vector_model(table_name=table_name)
+            VectorOrm = VectorStore.get_orm(table_name=table_name)
 
             for doc in docs:
                 row = VectorOrm(

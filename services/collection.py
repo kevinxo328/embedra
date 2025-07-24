@@ -380,7 +380,7 @@ class CollectionService:
                 "No files specified for deletion. Provide file IDs or set 'all' to True."
             )
 
-        VectorModel = VectorStore.get_vector_model(
+        VectorOrm = VectorStore.get_orm(
             table_name=cls().__create_vector_table_name(collection_id),
         )
 
@@ -397,8 +397,8 @@ class CollectionService:
             await session.execute(
                 delete(File).where(File.collection_id == collection_id)
             )
-            if VectorModel:
-                smst = delete(VectorModel)
+            if VectorOrm:
+                smst = delete(VectorOrm)
                 await session.execute(smst)
 
         elif file_ids:
@@ -418,9 +418,9 @@ class CollectionService:
 
                         # Delete the file and its associated vectors
                         await session.delete(file)
-                        if VectorModel:
-                            smst = delete(VectorModel).where(
-                                VectorModel.file_id.astext == file_id,  # type: ignore
+                        if VectorOrm:
+                            smst = delete(VectorOrm).where(
+                                VectorOrm.file_id.astext == file_id,  # type: ignore
                             )
                             await session.execute(smst)
 
