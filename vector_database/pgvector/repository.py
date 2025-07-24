@@ -101,7 +101,8 @@ class PgVectorRepository:
         """
         Delete documents from the specified vector table.
         If file_id is provided, delete documents associated with that file_id.
-        This method does not commit the transaction.
+
+        #### This method does not commit the transaction.
         """
 
         await self.__validate_table_exists(table_name)

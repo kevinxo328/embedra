@@ -65,7 +65,7 @@ class FileRepository:
     async def stage_update(self, file: File):
         """
         Update an existing file.
-        This method does not commit the transaction.
+        #### This method does not commit the transaction.
         """
         await self.session.merge(file)
         return file
@@ -73,7 +73,7 @@ class FileRepository:
     async def stage_delete(self, file: File):
         """
         Delete a file.
-        This method does not commit the transaction.
+        #### This method does not commit the transaction.
         """
         await self.session.delete(file)
         return True
@@ -82,7 +82,7 @@ class FileRepository:
         """
         Delete all files associated with a specific collection.
 
-        This method does not commit the transaction.
+        #### This method does not commit the transaction.
         """
         await self.session.execute(
             delete(File).where(File.collection_id == collection_id)
