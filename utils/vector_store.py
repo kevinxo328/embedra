@@ -56,7 +56,7 @@ class PostgresVectorStore:
             text: Mapped[str] = mapped_column(
                 String, nullable=False, comment="text associated with the document"
             )
-            embedding: Mapped[Vector] = mapped_column(
+            embedding: Mapped[list[float]] = mapped_column(
                 Vector(), nullable=True, comment="document embedding"  # type: ignore
             )
             status: Mapped[DocumentEmbeddingStatus] = mapped_column(
