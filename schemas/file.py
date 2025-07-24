@@ -1,8 +1,9 @@
 from datetime import datetime
+from enum import Enum
 from typing import Annotated, Literal, Optional, Union
 
 from fastapi import Depends, Query, UploadFile
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from schemas.common import base_pagination_params
 
@@ -11,6 +12,29 @@ class FileBase(BaseModel):
     filename: str
     size: int
     content_type: str
+
+
+class FileStatus(Enum):
+    """
+    Represents the various states a file can be in during processing.
+
+    The states include:
+    - UPLOADED: The file has been uploaded successfully and waiting for chunking.
+    - CHUNKED: The file has been successfully chunked.
+    - CHUNK_FAILED: The file chunking failed.
+    - EMBEDDING: The file is currently being embedded.
+    - EMBEDDING_PARTIAL_FAILED: Some chunks of the file failed to embed.
+    - SUCCESS: The file processing was successful.
+    - FAILED: The file processing failed for an unspecified reason.
+    """
+
+    UPLOADED = "uploaded"
+    CHUNKED = "chunked"
+    CHUNK_FAILED = "chunk_failed"
+    EMBEDDING = "embedding"
+    EMBEDDING_PARTIAL_FAILED = "embedding_partial_failed"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 
 class File(FileBase):
@@ -25,6 +49,7 @@ class File(FileBase):
     path: str
     created_at: datetime
     size: int
+    status: FileStatus
 
 
 class ValidatedUploadFile(UploadFile):
