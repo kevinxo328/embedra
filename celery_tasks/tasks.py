@@ -35,8 +35,8 @@ def check_file_status(file_id: str, table_name: str):
             session.commit()
 
 
-@app.task(name="tasks.embed_doc")
-def embed_doc(
+@app.task(name="tasks.embed_document")
+def embed_document(
     table_name: str,
     doc_id: str,
 ):
@@ -94,7 +94,7 @@ def embed_documents(file_id: str, table_name: str):
         )
 
     for doc in docs:
-        embed_doc.apply_async(kwargs={"table_name": table_name, "doc_id": doc.id})
+        embed_document.apply_async(kwargs={"table_name": table_name, "doc_id": doc.id})
 
 
 @app.task(name="tasks.extract_file")
