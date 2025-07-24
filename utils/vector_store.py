@@ -48,8 +48,6 @@ class VectorStatus(Enum):
 
 # TODO: Implement similarity search and hybrid search
 # TODO: Add logging for vector store operations
-
-
 class PostgresVectorStore:
     def __init__(self, max_cache_size: int = 512):
         self._registry = registry()
@@ -63,9 +61,9 @@ class PostgresVectorStore:
         """
         return re.match(r"^[a-zA-Z0-9_]+$", table_name)
 
-    def __create_vector_orm(self, table_name: str):
+    def __create_orm(self, table_name: str):
         """
-        Create a new vector ORM class with the specified name and dimension.
+        Create a new ORM class with the specified name.
         """
 
         @self._registry.mapped
@@ -117,7 +115,7 @@ class PostgresVectorStore:
             return cached
 
         # Create a new vector ORM and cache it
-        VectorOrm = self.__create_vector_orm(table_name)
+        VectorOrm = self.__create_orm(table_name)
 
         def sync_check_create(sync_conn):
             """
@@ -144,7 +142,7 @@ class PostgresVectorStore:
         if cached:
             return cached
 
-        return self.__create_vector_orm(table_name)
+        return self.__create_orm(table_name)
 
     async def drop_vector_table(
         self,
