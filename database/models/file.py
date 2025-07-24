@@ -3,8 +3,10 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from schemas.file import FileStatus
 
 if TYPE_CHECKING:
     from .collection import Collection
@@ -42,6 +44,12 @@ class File(Base):
         nullable=False,
         server_default=func.now(),
         comment="timestamp when the file was created",
+    )
+    status: Mapped[FileStatus] = mapped_column(
+        ENUM(FileStatus),
+        nullable=False,
+        default=FileStatus.UPLOADED,
+        comment="current processing status of the file",
     )
 
     # Relationship to collection
