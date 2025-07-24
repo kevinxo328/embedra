@@ -6,7 +6,7 @@ from schemas.file import FileStatus
 from settings import VectorStore
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
-from utils.vector_store import EmbeddingStatus
+from utils.vector_store import DocumentEmbeddingStatus
 
 from .celery import Session, app
 
@@ -25,9 +25,9 @@ def check_file_status(file_id: str, table_name: str):
 
         new_status = FileStatus.EMBEDDING
 
-        if all(doc.status == EmbeddingStatus.SUCCESS for doc in docs):
+        if all(doc.status == DocumentEmbeddingStatus.SUCCESS for doc in docs):
             new_status = FileStatus.SUCCESS
-        elif any(doc.status == EmbeddingStatus.FAILED for doc in docs):
+        elif any(doc.status == DocumentEmbeddingStatus.FAILED for doc in docs):
             new_status = FileStatus.EMBEDDING_PARTIAL_FAILED
 
         if file.status != new_status:
@@ -66,10 +66,10 @@ def embed_doc(
             )
 
             doc.embedding = embedding_model.embed_query(doc.text)
-            doc.status = EmbeddingStatus.SUCCESS
+            doc.status = DocumentEmbeddingStatus.SUCCESS
             session.commit()
         except Exception:
-            doc.status = EmbeddingStatus.FAILED
+            doc.status = DocumentEmbeddingStatus.FAILED
             session.commit()
             raise
 

@@ -36,7 +36,7 @@ class LRUCache:
         self._cache.clear()
 
 
-class EmbeddingStatus(Enum):
+class DocumentEmbeddingStatus(Enum):
     """
     Enum to represent the status of a document embedding.
     """
@@ -67,43 +67,43 @@ class PostgresVectorStore:
         """
 
         @self._registry.mapped
-        class DynamicVectorOrm:
+        class DynamicOrm:
             __tablename__ = table_name
             __table_args__ = {"extend_existing": True}
             id: Mapped[str] = mapped_column(
                 UUID(as_uuid=False),
                 primary_key=True,
                 default=uuid4,
-                comment="unique identifier for the vector",
+                comment="unique identifier for the document",
             )
             text: Mapped[str] = mapped_column(
-                String, nullable=False, comment="text associated with the vector"
+                String, nullable=False, comment="text associated with the document"
             )
             embedding: Mapped[Vector] = mapped_column(
-                Vector(), nullable=True, comment="vector embedding"  # type: ignore
+                Vector(), nullable=True, comment="document embedding"  # type: ignore
             )
-            status: Mapped[EmbeddingStatus] = mapped_column(
-                ENUM(EmbeddingStatus),
+            status: Mapped[DocumentEmbeddingStatus] = mapped_column(
+                ENUM(DocumentEmbeddingStatus),
                 nullable=False,
-                default=EmbeddingStatus.PENDING,
-                comment="status of the vector",
+                default=DocumentEmbeddingStatus.PENDING,
+                comment="status of the document embedding",
             )
             # TODO: Create ForeignKey to File table.
             file_id: Mapped[str] = mapped_column(
                 UUID(as_uuid=False),
                 nullable=False,
-                comment="ID of the file associated with the vector",
+                comment="ID of the file associated with the document",
             )
             meta: Mapped[Union[dict, None]] = mapped_column(
                 "metadata",
                 JSONB,
                 nullable=True,
-                comment="additional metadata for the vector",
+                comment="additional metadata for the document",
             )
 
-        self._model_cache.set(table_name, DynamicVectorOrm)
+        self._model_cache.set(table_name, DynamicOrm)
 
-        return DynamicVectorOrm
+        return DynamicOrm
 
     async def create_vector_table(self, table_name: str, session: AsyncSession):
         if not self.__validate_table_name(table_name):
