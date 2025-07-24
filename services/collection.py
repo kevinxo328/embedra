@@ -202,6 +202,9 @@ class CollectionService:
             vector_table_name,
             session,
         )
+
+        # Refresh the collection to apply ORM mappings
+        await session.refresh(collection)
         return collection
 
     @classmethod
