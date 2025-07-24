@@ -154,8 +154,7 @@ class CollectionService:
         await session.flush()  # Ensure the collection ID is generated
 
         # Create a vector table for the new collection
-        instance = cls()
-        vector_table_name = instance.__create_vector_table_name(collection.id)
+        vector_table_name = cls().__create_vector_table_name(collection.id)
         await VectorStore.create_vector_table(
             vector_table_name,
             session,
@@ -226,8 +225,7 @@ class CollectionService:
         if not collection:
             raise CollectionNotFoundException(collection_id)
 
-        instance = cls()
-        vector_table_name = instance.__create_vector_table_name(collection.id)
+        vector_table_name = cls().__create_vector_table_name(collection.id)
 
         # Store file paths before deletion for cleanup
         file_paths = [file.path for file in collection.files]
@@ -327,8 +325,7 @@ class CollectionService:
             await session.flush()
 
             # Process the file in the background using Celery
-            instance = cls()
-            table_name = instance.__create_vector_table_name(collection_id)
+            table_name = cls().__create_vector_table_name(collection_id)
             process_file.apply_async(
                 kwargs={"file_id": new_file.id, "table_name": table_name}
             )
@@ -468,7 +465,6 @@ class CollectionService:
         ### Raises:
         - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
-        instance = cls()
         collection = await cls.get_collection_by_id(
             collection_id=str(collection_id), session=session
         )
@@ -476,7 +472,7 @@ class CollectionService:
         if not collection:
             raise CollectionNotFoundException(str(collection_id))
 
-        vector_table_name = instance.__create_vector_table_name(collection_id)
+        vector_table_name = cls().__create_vector_table_name(collection_id)
 
         # Get the embedding model for the collection
         embedding_model = collection.embedding_model
