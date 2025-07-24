@@ -1,7 +1,7 @@
 import re
 from collections import OrderedDict
 from enum import Enum
-from typing import Union
+from typing import Any, Generic, TypeVar, Union
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -10,26 +10,28 @@ from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, registry
 
+T = TypeVar("T")
 
-class LRUCache:
+
+class LRUCache(Generic[T]):
     def __init__(self, max_size: int = 512):
         self.max_size = max_size
-        self._cache = OrderedDict()
+        self._cache: OrderedDict[str, T] = OrderedDict()
 
-    def get(self, key):
+    def get(self, key: str):
         if key in self._cache:
             self._cache.move_to_end(key)
             return self._cache[key]
         return None
 
-    def set(self, key, value):
+    def set(self, key: str, value: T):
         if key in self._cache:
             self._cache.move_to_end(key)
         self._cache[key] = value
         if len(self._cache) > self.max_size:
             self._cache.popitem(last=False)
 
-    def drop(self, key):
+    def drop(self, key: str):
         self._cache.pop(key, None)
 
     def clear(self):
@@ -52,7 +54,7 @@ class PostgresVectorStore:
     def __init__(self, max_cache_size: int = 512):
         self._registry = registry()
         self._metadata = self._registry.metadata
-        self._model_cache = LRUCache(max_cache_size)
+        self._model_cache: LRUCache[Any] = LRUCache(max_cache_size)
 
     def __validate_table_name(self, table_name: str):
         """
@@ -109,6 +111,18 @@ class PostgresVectorStore:
 
         return DynamicOrm
 
+    def get_orm(self, table_name: str):
+        """
+        Get the vector model for the specified table.
+        """
+        self.__validate_table_name(table_name)
+
+        cached = self._model_cache.get(table_name)
+        if cached:
+            return cached
+
+        return self.__create_orm(table_name)
+
     async def create_vector_table(self, table_name: str, session: AsyncSession):
         self.__validate_table_name(table_name)
 
@@ -133,18 +147,6 @@ class PostgresVectorStore:
         conn = await session.connection()
         await conn.run_sync(sync_check_create)
         return VectorOrm
-
-    def get_orm(self, table_name: str):
-        """
-        Get the vector model for the specified table.
-        """
-        self.__validate_table_name(table_name)
-
-        cached = self._model_cache.get(table_name)
-        if cached:
-            return cached
-
-        return self.__create_orm(table_name)
 
     async def drop_vector_table(
         self,
