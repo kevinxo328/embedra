@@ -33,6 +33,14 @@ if APP_ENVIRONMENT not in ALLOWED_ENVIRONMENTS:
         f"APP_ENVIROMENT must be one of {ALLOWED_ENVIRONMENTS}, got '{APP_ENVIRONMENT}'"
     )
 
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND")
+if not CELERY_BROKER_URL or not CELERY_RESULT_BACKEND:
+    raise ValueError(
+        "Both CELERY_BROKER_URL and CELERY_RESULT_BACKEND must be set in the environment variables"
+    )
+
 PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 VectorStore = PostgresVectorStore()

@@ -1,11 +1,12 @@
 from typing import Union
 
-from langchain_core.documents import Document
+from celery import signature
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from celery_tasks import process_file
 from database.models.collection import Collection
 from database.models.file import File
 from schemas.collection import (
@@ -15,10 +16,8 @@ from schemas.collection import (
     CollectionUpdate,
 )
 from schemas.common import DeleteResponse, PaginatedResponse
-from schemas.embedding import EmbeddingModelMetadata
 from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
-from settings import VectorStore, logger
-from utils.doc_processor import markitdown_converter, split_markdown
+from settings import VectorStore
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
@@ -47,49 +46,6 @@ class CollectionService:
         """
 
         return f"collection_{str(collection_id).replace('-', '_')}"
-
-    def __extract_file(self, path: str) -> list[Document]:
-        """
-        Extract documents from a file path.
-        """
-        convert_result = markitdown_converter(source=path)
-        return split_markdown(markdown=convert_result.markdown)
-
-    async def __store_documents_to_collection(
-        self,
-        docs: list[Document],
-        collection_id: str,
-        embedding_model_provider: str,
-        embedding_model: str,
-        embedding_metadata: Union[EmbeddingModelMetadata, None],
-        file_id: str,
-        session: AsyncSession,
-    ):
-        """Store documents to collection vector store."""
-        vector_table_name = self.__generate_collection_vector_table_name(collection_id)
-        VectorModel = VectorStore.get_vector_model(table_name=vector_table_name)
-
-        if not VectorModel:
-            raise ValueError(f"Vector model for collection {collection_id} not found")
-
-        embeddings = get_embedding_model_by_provider_name(
-            embedding_model_provider,
-            embedding_model,
-            embedding_metadata,
-        )
-
-        for doc in docs:
-            embedding = embeddings.embed_query(doc.page_content)
-            vector_row = VectorModel(
-                text=doc.page_content,
-                embedding=embedding,
-                meta={
-                    **doc.metadata,
-                    "collection_id": collection_id,
-                    "file_id": file_id,
-                },
-            )
-            session.add(vector_row)
 
     @staticmethod
     async def get_collections(
@@ -240,6 +196,7 @@ class CollectionService:
         await session.refresh(collection)
         return collection
 
+    # TODO: Need to check if any files are processing in celery before deleting the collection.
     @classmethod
     async def delete_collection(cls, collection_id: str, session: AsyncSession):
         """
@@ -356,39 +313,34 @@ class CollectionService:
         if not collection:
             raise CollectionNotFoundException(collection_id)
 
-        save_file_path = save_file_to_local(file, save_dir=f"docs/{collection_id}")
-        new_file = File(
-            filename=file.filename,
-            size=file.size,
-            path=save_file_path,
-            content_type=file.content_type,
-            collection_id=collection_id,
-        )
-        session.add(new_file)
-        await session.flush()
-
-        instance = cls()
-        docs = instance.__extract_file(save_file_path)
         try:
-            embedding_metadata = collection.embedding_model_metadata
 
-            await instance.__store_documents_to_collection(
-                docs=docs,
+            save_file_path = save_file_to_local(file, save_dir=f"docs/{collection_id}")
+            new_file = File(
+                filename=file.filename,
+                size=file.size,
+                path=save_file_path,
+                content_type=file.content_type,
                 collection_id=collection_id,
-                embedding_model=collection.embedding_model,
-                file_id=str(new_file.id),
-                session=session,
-                embedding_metadata=embedding_metadata,
-                embedding_model_provider=collection.embedding_model_provider,
             )
-        except Exception as e:
-            delete_local_file(save_file_path)
-            logger.error(f"Failed to store documents in collection: {e}")
-            raise RuntimeError("Failed to store documents in collection") from e
+            session.add(new_file)
+            await session.flush()
 
+            # Process the file in the background using Celery
+            instance = cls()
+            table_name = instance.__generate_collection_vector_table_name(collection_id)
+            process_file.apply_async(
+                kwargs={"file_id": new_file.id, "table_name": table_name}
+            )
+
+        except Exception:
+            delete_local_file(save_file_path)
+
+        # Refresh the new file to apply ORM mappings
         await session.refresh(new_file)
         return new_file
 
+    # TODO: Need to check if any files are processing in celery before deleting the collection.
     @classmethod
     async def delete_collection_files(
         cls,
@@ -449,9 +401,7 @@ class CollectionService:
                 delete(File).where(File.collection_id == collection_id)
             )
             if VectorModel:
-                smst = delete(VectorModel).where(
-                    VectorModel.meta["collection_id"].astext == collection_id  # type: ignore
-                )
+                smst = delete(VectorModel)
                 await session.execute(smst)
 
         elif file_ids:
@@ -473,8 +423,7 @@ class CollectionService:
                         await session.delete(file)
                         if VectorModel:
                             smst = delete(VectorModel).where(
-                                VectorModel.meta["collection_id"].astext == collection_id,  # type: ignore
-                                VectorModel.meta["file_id"].astext == file_id,  # type: ignore
+                                VectorModel.file_id.astext == file_id,  # type: ignore
                             )
                             await session.execute(smst)
 

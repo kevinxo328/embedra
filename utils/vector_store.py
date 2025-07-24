@@ -1,11 +1,12 @@
 import re
 from collections import OrderedDict
+from enum import Enum
 from typing import Union
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import String, select, text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, registry
 
@@ -33,6 +34,16 @@ class LRUCache:
 
     def clear(self):
         self._cache.clear()
+
+
+class VectorStatus(Enum):
+    """
+    Enum to represent the status of a vector.
+    """
+
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 
 # TODO: Implement similarity search and hybrid search
@@ -71,7 +82,19 @@ class PostgresVectorStore:
                 String, nullable=False, comment="text associated with the vector"
             )
             embedding: Mapped[Vector] = mapped_column(
-                Vector(), nullable=False, comment="vector embedding"  # type: ignore
+                Vector(), nullable=True, comment="vector embedding"  # type: ignore
+            )
+            status: Mapped[VectorStatus] = mapped_column(
+                ENUM(VectorStatus),
+                nullable=False,
+                default=VectorStatus.PENDING,
+                comment="status of the vector",
+            )
+            # TODO: Create ForeignKey to File table.
+            file_id: Mapped[str] = mapped_column(
+                UUID(as_uuid=False),
+                nullable=False,
+                comment="ID of the file associated with the vector",
             )
             meta: Mapped[Union[dict, None]] = mapped_column(
                 "metadata",
