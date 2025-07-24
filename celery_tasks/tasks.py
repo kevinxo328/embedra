@@ -3,10 +3,9 @@ from celery.utils.log import get_task_logger
 from database.models.collection import Collection
 from database.models.file import File
 from schemas.file import FileStatus
-from settings import VectorStore
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
-from utils.vector_store import DocumentEmbeddingStatus
+from vector_database.pgvector.factory import DocumentEmbeddingStatus, PgVectorOrmFactory
 
 from .celery import Session, app
 
@@ -20,7 +19,7 @@ def check_file_status(file_id: str, table_name: str):
 
     with Session() as session:
         file = session.query(File).filter(File.id == file_id).one()
-        VectorOrm = VectorStore.get_orm(table_name=table_name)
+        VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
         docs = session.query(VectorOrm).filter(VectorOrm.file_id == file_id).all()
 
         new_status = FileStatus.EMBEDDING
@@ -44,7 +43,7 @@ def embed_document(
     Embed a document using the specified provider and model.
     """
 
-    VectorOrm = VectorStore.get_orm(table_name=table_name)
+    VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
 
     if not VectorOrm:
         raise ValueError(f"Vector model for table '{table_name}' not found")
@@ -81,7 +80,7 @@ def embed_document(
 
 @app.task(name="tasks.embed_documents")
 def embed_documents(file_id: str, table_name: str):
-    VectorOrm = VectorStore.get_orm(table_name=table_name)
+    VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
 
     if not VectorOrm:
         raise ValueError(f"Vector model for table '{table_name}' not found")
@@ -113,7 +112,7 @@ def extract_file(file_id: str, table_name: str):
             result = markitdown_converter(source=file.path)
             docs = split_markdown(result.markdown)
 
-            VectorOrm = VectorStore.get_orm(table_name=table_name)
+            VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
 
             for doc in docs:
                 row = VectorOrm(

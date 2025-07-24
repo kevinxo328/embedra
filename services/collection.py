@@ -1,6 +1,5 @@
 from typing import Union
 
-from sqlalchemy import delete
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,12 +16,12 @@ from schemas.collection import (
 )
 from schemas.common import DeleteResponse, PaginatedResponse
 from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
-from settings import VectorStore
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
 )
 from utils.file_uploader import delete_local_file, save_file_to_local
+from vector_database.pgvector.repository import PgVectorRepository
 
 
 class CollectionServiceException(Exception):
@@ -40,6 +39,7 @@ class CollectionService:
         self.session = session
         self.collection_repository = CollectionRepository(session)
         self.file_repository = FileRepository(session)
+        self.vector_store = PgVectorRepository(session)
 
     def __create_vector_table_name(self, collection_id: str) -> str:
         """
@@ -140,10 +140,7 @@ class CollectionService:
 
         # Create a vector table for the new collection
         vector_table_name = self.__create_vector_table_name(collection.id)
-        await VectorStore.create_vector_table(
-            vector_table_name,
-            self.session,
-        )
+        await self.vector_store.create_table(vector_table_name)
 
         # Refresh the collection to apply ORM mappings
         await self.session.refresh(collection)
@@ -202,7 +199,7 @@ class CollectionService:
         file_paths = [file.path for file in collection.files]
 
         await self.collection_repository.stage_delete(collection)
-        await VectorStore.drop_vector_table(vector_table_name, self.session)
+        await self.vector_store.drop_table(vector_table_name)
 
         return file_paths
 
@@ -313,10 +310,6 @@ class CollectionService:
                 "No files specified for deletion. Provide file IDs or set 'all' to True."
             )
 
-        VectorOrm = VectorStore.get_orm(
-            table_name=self.__create_vector_table_name(collection_id),
-        )
-
         deleted_file_ids = []
         failed_file_ids = []
         failed_messages = []
@@ -328,9 +321,9 @@ class CollectionService:
 
             # Delete all files in the collection and their vectors
             await self.file_repository.stage_delete_by_collection_id(collection_id)
-            if VectorOrm:
-                smst = delete(VectorOrm)
-                await self.session.execute(smst)
+            await self.vector_store.stage_clear_documents_by_table_name(
+                table_name=self.__create_vector_table_name(collection_id)
+            )
 
         elif file_ids:
             for file_id in file_ids:
@@ -344,12 +337,12 @@ class CollectionService:
 
                         if file:
                             await self.file_repository.stage_delete(file)
-
-                            if VectorOrm:
-                                smst = delete(VectorOrm).where(
-                                    VectorOrm.file_id == file_id,  # type: ignore
-                                )
-                                await self.session.execute(smst)
+                            await self.vector_store.stage_delete_documents_by_file_id(
+                                table_name=self.__create_vector_table_name(
+                                    collection_id
+                                ),
+                                file_id=file_id,
+                            )
 
                             delete_file_paths.append(file.path)
                             deleted_file_ids.append(file_id)
@@ -412,8 +405,7 @@ class CollectionService:
         query_vector = embeddings.embed_query(query)
 
         try:
-            results = await VectorStore.consine_similarity_search(
-                session=self.session,
+            results = await self.vector_store.cosine_similarity_search(
                 table_name=vector_table_name,
                 query_vector=query_vector,
                 top_k=top_k,

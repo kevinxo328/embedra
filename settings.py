@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 
 from utils.logger import initialize_logger
 from utils.request_context import RequestContext
-from utils.vector_store import PostgresVectorStore
 
 # Load environment variables from .env file
 load_dotenv()
@@ -43,7 +42,6 @@ if not CELERY_BROKER_URL or not CELERY_RESULT_BACKEND:
 
 PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VectorStore = PostgresVectorStore()
 
 # Initialize request context for logging
 request_context = RequestContext()
