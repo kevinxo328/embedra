@@ -1,6 +1,5 @@
 from typing import Union
 
-from celery import signature
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -143,7 +142,12 @@ class CollectionService:
         - embedding_model_metadata: Additional metadata for the embedding model, such as endpoint and dimensions.
         """
         # Validate the embedding model provider
-        EmbeddingModelProvider(collection_data.embedding_model_provider)
+        try:
+            EmbeddingModelProvider(collection_data.embedding_model_provider)
+        except ValueError:
+            raise CollectionServiceException(
+                f"Invalid embedding model provider '{collection_data.embedding_model_provider}'. Only supported providers are: {', '.join(EmbeddingModelProvider._member_names_)}"
+            )
 
         collection = Collection(**collection_data.model_dump())
         session.add(collection)
