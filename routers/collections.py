@@ -91,7 +91,7 @@ async def create_collection(
         return await CollectionService.create_collection(
             collection_data=collection, session=session
         )
-    except ValueError as e:
+    except CollectionServiceException as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
