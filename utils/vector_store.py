@@ -36,9 +36,9 @@ class LRUCache:
         self._cache.clear()
 
 
-class VectorStatus(Enum):
+class EmbeddingStatus(Enum):
     """
-    Enum to represent the status of a vector.
+    Enum to represent the status of a document embedding.
     """
 
     PENDING = "pending"
@@ -82,10 +82,10 @@ class PostgresVectorStore:
             embedding: Mapped[Vector] = mapped_column(
                 Vector(), nullable=True, comment="vector embedding"  # type: ignore
             )
-            status: Mapped[VectorStatus] = mapped_column(
-                ENUM(VectorStatus),
+            status: Mapped[EmbeddingStatus] = mapped_column(
+                ENUM(EmbeddingStatus),
                 nullable=False,
-                default=VectorStatus.PENDING,
+                default=EmbeddingStatus.PENDING,
                 comment="status of the vector",
             )
             # TODO: Create ForeignKey to File table.
