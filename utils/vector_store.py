@@ -59,7 +59,11 @@ class PostgresVectorStore:
         Validate the table name to prevent SQL injection.
         Only alphanumeric characters and underscores are allowed.
         """
-        return re.match(r"^[a-zA-Z0-9_]+$", table_name)
+        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+            raise ValueError(
+                f"Invalid table name: {table_name}. Only alphanumeric characters and underscores are allowed."
+            )
+        return True
 
     def __create_orm(self, table_name: str):
         """
@@ -106,8 +110,7 @@ class PostgresVectorStore:
         return DynamicOrm
 
     async def create_vector_table(self, table_name: str, session: AsyncSession):
-        if not self.__validate_table_name(table_name):
-            raise ValueError(f"Invalid table name: {table_name}")
+        self.__validate_table_name(table_name)
 
         # Check if the table already exists in the cache
         cached = self._model_cache.get(table_name)
@@ -135,8 +138,7 @@ class PostgresVectorStore:
         """
         Get the vector model for the specified table.
         """
-        if not self.__validate_table_name(table_name):
-            raise ValueError(f"Invalid table name: {table_name}")
+        self.__validate_table_name(table_name)
 
         cached = self._model_cache.get(table_name)
         if cached:
@@ -152,8 +154,7 @@ class PostgresVectorStore:
         """
         Drop the vector table with the specified name.
         """
-        if not self.__validate_table_name(table_name):
-            raise ValueError(f"Invalid table name: {table_name}")
+        self.__validate_table_name(table_name)
 
         # Remove from cache first
         cached = self._model_cache.get(table_name)
@@ -187,8 +188,7 @@ class PostgresVectorStore:
         """
         Perform a similarity search in the specified vector table.
         """
-        if not self.__validate_table_name(table_name):
-            raise ValueError(f"Invalid table name: {table_name}")
+        self.__validate_table_name(table_name)
 
         VectorModel = self.get_vector_model(table_name)
         if not VectorModel:
