@@ -420,7 +420,7 @@ class CollectionService:
                         await session.delete(file)
                         if VectorOrm:
                             smst = delete(VectorOrm).where(
-                                VectorOrm.file_id.astext == file_id,  # type: ignore
+                                VectorOrm.file_id == file_id,  # type: ignore
                             )
                             await session.execute(smst)
 
