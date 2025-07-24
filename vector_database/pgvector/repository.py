@@ -93,31 +93,14 @@ class PgVectorRepository:
 
         return result.scalars().all()
 
-    async def stage_delete_documents_by_file_id(
+    async def stage_delete_documents(
         self,
         table_name: str,
-        file_id: str,
+        file_id: Optional[str] = None,
     ):
         """
-        Delete documents by their file ID in the specified vector table.
-        This method does not commit the transaction.
-        """
-
-        await self.__validate_table_exists(table_name)
-
-        TableOrm = self.orm_factory.get_orm(table_name)
-
-        stmt = delete(TableOrm).where(TableOrm.file_id == file_id)
-        await self.session.execute(stmt)
-
-        return True
-
-    async def stage_clear_documents_by_table_name(
-        self,
-        table_name: str,
-    ):
-        """
-        Delete all documents in the specified vector table.
+        Delete documents from the specified vector table.
+        If file_id is provided, delete documents associated with that file_id.
         This method does not commit the transaction.
         """
 
@@ -126,6 +109,9 @@ class PgVectorRepository:
         TableOrm = self.orm_factory.get_orm(table_name)
 
         stmt = delete(TableOrm)
+
+        if file_id:
+            stmt = stmt.where(TableOrm.file_id == file_id)
         await self.session.execute(stmt)
 
         return True

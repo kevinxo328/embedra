@@ -321,7 +321,7 @@ class CollectionService:
 
             # Delete all files in the collection and their vectors
             await self.file_repository.stage_delete_by_collection_id(collection_id)
-            await self.vector_store.stage_clear_documents_by_table_name(
+            await self.vector_store.stage_delete_documents(
                 table_name=self.__create_vector_table_name(collection_id)
             )
 
@@ -337,7 +337,7 @@ class CollectionService:
 
                         if file:
                             await self.file_repository.stage_delete(file)
-                            await self.vector_store.stage_delete_documents_by_file_id(
+                            await self.vector_store.stage_delete_documents(
                                 table_name=self.__create_vector_table_name(
                                     collection_id
                                 ),
