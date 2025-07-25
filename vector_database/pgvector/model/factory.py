@@ -90,3 +90,18 @@ class PgVectorOrmFactory:
             metadata JSONB
         );
         """
+
+    def _create_enum_if_not_exists_sql(self):
+        """
+        Create the ENUM type in the database if it does not exist.
+        """
+        return f"""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = '{DocumentEmbeddingStatus.pgtype()}') THEN
+                CREATE TYPE {DocumentEmbeddingStatus.pgtype()} AS ENUM (
+                    {', '.join([f"'{status.name}'" for status in DocumentEmbeddingStatus])}
+                );
+            END IF;
+        END $$;
+        """

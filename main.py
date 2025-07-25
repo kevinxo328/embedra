@@ -6,6 +6,7 @@ from database.db import init_db
 from middleware.logging_middleware import LoggingMiddleware
 from routers import collections, embeddings
 from settings import APP_ENVIRONMENT, logger, request_context
+from vector_database.pgvector.db import init_db as init_pgvector_db
 
 
 @asynccontextmanager
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
     This can be used to set up database connections, load configurations, etc.
     """
     await init_db()
+    await init_pgvector_db()
     yield
 
 
