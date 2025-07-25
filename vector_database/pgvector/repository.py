@@ -54,7 +54,7 @@ class PgVectorRepository:
         Drop the vector table with the specified name.
         """
 
-        self.orm_factory.__validate_table_name(table_name)
+        self.orm_factory.validate_table_name(table_name)
 
         def sync_drop_table(sync_conn):
             # Check if table exists before trying to drop

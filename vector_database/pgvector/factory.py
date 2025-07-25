@@ -24,20 +24,6 @@ class PgVectorOrmFactory:
         self._registry = registry()
         self._metadata = self._registry.metadata
 
-    def __validate_table_name(self, table_name: str):
-        """
-        Validate the table name to prevent SQL injection.
-        Only alphanumeric characters and underscores are allowed.
-
-        ### Raises
-        ValueError: If the table name contains invalid characters.
-        """
-        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
-            raise ValueError(
-                f"Invalid table name: {table_name}. Only alphanumeric characters and underscores are allowed."
-            )
-        return True
-
     def __create_orm(self, table_name: str):
         """
         Create a new ORM class with the specified name.
@@ -87,10 +73,24 @@ class PgVectorOrmFactory:
 
         return DynamicOrm
 
+    def validate_table_name(self, table_name: str):
+        """
+        Validate the table name to prevent SQL injection.
+        Only alphanumeric characters and underscores are allowed.
+
+        ### Raises
+        ValueError: If the table name contains invalid characters.
+        """
+        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
+            raise ValueError(
+                f"Invalid table name: {table_name}. Only alphanumeric characters and underscores are allowed."
+            )
+        return True
+
     def get_orm(self, table_name: str):
         """
         Get the ORM class for the specified table name.
         """
-        self.__validate_table_name(table_name)
+        self.validate_table_name(table_name)
 
         return self.__create_orm(table_name)
