@@ -192,7 +192,7 @@ class CollectionService:
         ### Raises:
         - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
-        collection = await self.__validate_collection_exists(id)
+        collection = await self.__validate_collection_exists(id, with_files=True)
         vector_table_name = self.__create_vector_table_name(collection.id)
 
         # Store file paths before deletion for cleanup
