@@ -1,14 +1,14 @@
-from typing import Union
+from typing import Optional
 
 from pydantic import BaseModel
 
 
 class EmbeddingModelMetadata(BaseModel):
-    endpoint: Union[str, None] = None
-    dimensions: Union[int, None] = None
+    endpoint: Optional[str] = None
+    dimensions: Optional[int] = None
 
 
 class EmbeddingModel(BaseModel):
     embedding_model: str
     embedding_model_provider: str
-    embedding_model_metadata: Union[EmbeddingModelMetadata, None] = None
+    embedding_model_metadata: Optional[EmbeddingModelMetadata] = None

@@ -68,7 +68,7 @@ class CollectionRepository:
     async def stage_update(self, collection: Collection):
         """
         Update an existing collection.
-        This method does not commit the transaction.
+        #### This method does not commit the transaction.
         """
         await self.session.merge(collection)
         return collection
@@ -76,7 +76,7 @@ class CollectionRepository:
     async def stage_delete(self, collection: Collection):
         """
         Delete a collection.
-        This method does not commit the transaction.
+        #### This method does not commit the transaction.
         """
         await self.session.delete(collection)
         return True
