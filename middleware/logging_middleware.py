@@ -4,6 +4,8 @@ import uuid
 from typing import Callable
 
 from fastapi import Request, Response
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from utils.request_context import RequestContext
@@ -37,10 +39,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             request_id = str(uuid.uuid4())
 
         self.context.reset()
+
         # Store request ID in context variable for use in logging
         self.context.set_request_id(request_id)
 
         start_time = time.perf_counter()
+
         try:
             req_body = await request.body()
         except Exception:
@@ -48,11 +52,22 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
+        except IntegrityError as e:
+            self.logger.error(
+                f"Integrity error occurred during request processing: {e}",
+            )
+            response = JSONResponse(
+                status_code=400,
+                content={"detail": f"Integrity error occurred: {e.orig}"},
+            )
         except Exception as e:
             self.logger.error(
                 f"Unexpected error occurred during request processing: {e}",
             )
-            raise e
+            response = JSONResponse(
+                status_code=500,
+                content={"detail": "Internal Server Error"},
+            )
 
         process_time = time.perf_counter() - start_time
         method = request.method
@@ -68,16 +83,21 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         else:
             body_str = "N/A"
 
-        self.logger.info(
-            f"Request processed: Method: {method}, URL: {url}, "
+        log_str = (
+            f"Request ID: {request_id}, "
+            f"Method: {method}, URL: {url}, "
             f"Query Params: {query_params}, "
             f"Body: {body_str}, "
             f"Response Status Code: {response.status_code}, "
-            f"Processing Time: {process_time:.4f} seconds",
+            f"Processing Time: {process_time:.4f} seconds"
         )
+
+        if response.status_code >= 400:
+            self.logger.error(log_str)
+        else:
+            self.logger.info(log_str)
 
         response.headers[self.header_name] = request_id
         response.headers["X-Process-Time"] = str(process_time)
 
-        self.context.reset()
         return response
