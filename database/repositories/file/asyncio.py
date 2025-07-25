@@ -1,13 +1,14 @@
 from typing import Optional
 
-from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..models.file import File
+from ...models.file import File
+from .core import FileRepositoryCore
 
 
-class FileRepository:
+class FileRepositoryAsync(FileRepositoryCore):
     def __init__(self, session: AsyncSession):
+        super().__init__()
         self.session = session
 
     async def get(
@@ -22,29 +23,19 @@ class FileRepository:
     ):
         """Retrieve a list of collections with pagination."""
 
-        base_stmt = select(File).where(File.collection_id == collection_id)
+        stmt, total_stmt = self._get_expression(
+            collection_id=collection_id,
+            filename=filename,
+            content_type=content_type,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
 
-        if filename:
-            base_stmt = base_stmt.where(File.filename.ilike(f"%{filename}%"))
-
-        if content_type:
-            base_stmt = base_stmt.where(File.content_type == content_type)
-
-        # Count total files before applying limit and offset
-        total_stmt = select(func.count()).select_from(base_stmt.subquery())
         total_result = await self.session.execute(total_stmt)
         total_count = total_result.scalar_one()
 
-        # Apply limit and offset for pagination
-        stmt = base_stmt
-
-        if sort_by:
-            if sort_order == "asc":
-                stmt = stmt.order_by(getattr(File, sort_by).asc())
-            else:
-                stmt = stmt.order_by(getattr(File, sort_by).desc())
-
-        stmt = stmt.limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         files = result.scalars().all()
 
@@ -52,7 +43,14 @@ class FileRepository:
 
     async def get_by_id(self, id: str):
         """Retrieve a file by its ID."""
-        stmt = select(File).where(File.id == id)
+        stmt = self._get_by_id_expression(id)
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
+
+    async def get_by_id_or_none(self, id: str):
+        """Retrieve a file by its ID or return None if not found."""
+        stmt = self._get_by_id_expression(id)
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -84,7 +82,6 @@ class FileRepository:
 
         #### This method does not commit the transaction.
         """
-        await self.session.execute(
-            delete(File).where(File.collection_id == collection_id)
-        )
+        stmt = self._delete_expression(collection_id=collection_id)
+        await self.session.execute(stmt)
         return True

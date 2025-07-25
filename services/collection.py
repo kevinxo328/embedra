@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery_tasks import process_file
 from database.models.collection import Collection
 from database.models.file import File
-from database.repositories.collection import CollectionRepository
-from database.repositories.file import FileRepository
+from database.repositories.collection.asyncio import CollectionRepositoryAsync
+from database.repositories.file.asyncio import FileRepositoryAsync
 from schemas.collection import (
     CollectionCreate,
     CollectionFilter,
@@ -37,8 +37,8 @@ class CollectionNotFoundException(CollectionServiceException):
 class CollectionService:
     def __init__(self, session: AsyncSession):
         self.session = session
-        self.collection_repository = CollectionRepository(session)
-        self.file_repository = FileRepository(session)
+        self.collection_repository = CollectionRepositoryAsync(session)
+        self.file_repository = FileRepositoryAsync(session)
         self.vector_repository = PgVectorRepositoryAsync(session)
 
     def __create_vector_table_name(self, collection_id: str) -> str:
@@ -56,7 +56,7 @@ class CollectionService:
         Validate if a collection exists by its ID.
         Raises CollectionNotFoundException if not found.
         """
-        collection = await self.collection_repository.get_by_id(
+        collection = await self.collection_repository.get_by_id_or_none(
             id=collection_id, with_files=with_files
         )
         if not collection:
@@ -111,7 +111,9 @@ class CollectionService:
         ### Returns:
         The collection object or none if not found.
         """
-        return await self.collection_repository.get_by_id(id=id, with_files=with_files)
+        return await self.collection_repository.get_by_id_or_none(
+            id=id, with_files=with_files
+        )
 
     async def create_collection(self, data: CollectionCreate):
         """

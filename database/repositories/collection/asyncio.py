@@ -1,14 +1,14 @@
 from typing import Optional
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from ..models.collection import Collection
+from ...models.collection import Collection
+from .core import CollectionRepositoryCore
 
 
-class CollectionRepository:
+class CollectionRepositoryAsync(CollectionRepositoryCore):
     def __init__(self, session: AsyncSession):
+        super().__init__()
         self.session = session
 
     async def get(
@@ -22,29 +22,18 @@ class CollectionRepository:
     ):
         """Retrieve a list of collections with pagination."""
 
-        base_stmt = select(Collection)
+        stmt, total_stmt = self._get_expression(
+            name=name,
+            embedding_model=embedding_model,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
 
-        if name:
-            base_stmt = base_stmt.where(Collection.name.ilike(f"%{name}%"))
-
-        if embedding_model:
-            base_stmt = base_stmt.where(Collection.embedding_model == embedding_model)
-
-        # Count total collections before applying limit and offset
-        total_stmt = select(func.count()).select_from(base_stmt.subquery())
         total_result = await self.session.execute(total_stmt)
         total_count = total_result.scalar_one()
 
-        # Apply limit and offset for pagination
-        stmt = base_stmt
-
-        if sort_by:
-            if sort_order == "asc":
-                stmt = stmt.order_by(getattr(Collection, sort_by).asc())
-            else:
-                stmt = stmt.order_by(getattr(Collection, sort_by).desc())
-
-        stmt = stmt.limit(limit).offset(offset)
         result = await self.session.execute(stmt)
         collections = result.scalars().all()
 
@@ -52,10 +41,14 @@ class CollectionRepository:
 
     async def get_by_id(self, id: str, with_files: bool = False):
         """Retrieve a collection by its ID."""
-        stmt = select(Collection).where(Collection.id == id)
+        stmt = self._get_by_id_expression(id, with_files=with_files)
 
-        if with_files:
-            stmt = stmt.options(selectinload(Collection.files))
+        result = await self.session.execute(stmt)
+        return result.scalar_one()
+
+    async def get_by_id_or_none(self, id: str, with_files: bool = False):
+        """Retrieve a collection by its ID or return None if not found."""
+        stmt = self._get_by_id_expression(id, with_files=with_files)
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
