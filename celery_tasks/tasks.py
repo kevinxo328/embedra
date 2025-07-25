@@ -5,7 +5,8 @@ from database.models.file import File
 from schemas.file import FileStatus
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
-from vector_database.pgvector.factory import DocumentEmbeddingStatus, PgVectorOrmFactory
+from vector_database.pgvector.model.factory import DocumentEmbeddingStatus
+from vector_database.pgvector.repositories.sync import PgVectorRepositorySync
 
 from .celery import Session, app
 
@@ -19,9 +20,9 @@ def check_file_status(file_id: str, table_name: str):
 
     with Session() as session:
         file = session.query(File).filter(File.id == file_id).one()
-        VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
-        docs = session.query(VectorOrm).filter(VectorOrm.file_id == file_id).all()
-
+        docs = PgVectorRepositorySync(session).get_documents(
+            table_name=table_name, file_id=file_id
+        )
         new_status = FileStatus.EMBEDDING
 
         if all(doc.status == DocumentEmbeddingStatus.SUCCESS for doc in docs):
@@ -43,14 +44,11 @@ def embed_document(
     Embed a document using the specified provider and model.
     """
 
-    VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
-
-    if not VectorOrm:
-        raise ValueError(f"Vector model for table '{table_name}' not found")
-
     with Session() as session:
         try:
-            doc = session.query(VectorOrm).filter(VectorOrm.id == doc_id).one()
+            doc = PgVectorRepositorySync(session).get_document_by_id(
+                table_name=table_name, id=doc_id
+            )
             file = session.query(File).filter(File.id == doc.file_id).one()
             collection = (
                 session.query(Collection)
@@ -80,16 +78,9 @@ def embed_document(
 
 @app.task(name="tasks.embed_documents")
 def embed_documents(file_id: str, table_name: str):
-    VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
-
-    if not VectorOrm:
-        raise ValueError(f"Vector model for table '{table_name}' not found")
-
     with Session() as session:
-        docs = (
-            session.query(VectorOrm)
-            .filter(VectorOrm.file_id == file_id, VectorOrm.embedding == None)
-            .all()
+        docs = PgVectorRepositorySync(session).get_documents(
+            table_name=table_name, embedding_filter=False, file_id=file_id
         )
 
     for doc in docs:
@@ -111,18 +102,16 @@ def extract_file(file_id: str, table_name: str):
 
             result = markitdown_converter(source=file.path)
             docs = split_markdown(result.markdown)
-
-            VectorOrm = PgVectorOrmFactory().get_orm(table_name=table_name)
+            vector_repository = PgVectorRepositorySync(session)
 
             for doc in docs:
-                row = VectorOrm(
+                vector_repository.stage_add_document(
+                    table_name=table_name,
                     text=doc.page_content,
                     file_id=file.id,
-                    meta={
-                        **doc.metadata,
-                    },
+                    status=DocumentEmbeddingStatus.PENDING,
+                    meta={**doc.metadata},
                 )
-                session.add(row)
 
             file.status = FileStatus.CHUNKED
             session.commit()

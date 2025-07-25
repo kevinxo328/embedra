@@ -21,7 +21,7 @@ from utils.embeddings import (
     get_embedding_model_by_provider_name,
 )
 from utils.file_uploader import delete_local_file, save_file_to_local
-from vector_database.pgvector.repository import PgVectorRepository
+from vector_database.pgvector.repositories.asyncio import PgVectorRepositoryAsync
 
 
 class CollectionServiceException(Exception):
@@ -39,7 +39,7 @@ class CollectionService:
         self.session = session
         self.collection_repository = CollectionRepository(session)
         self.file_repository = FileRepository(session)
-        self.vector_store = PgVectorRepository(session)
+        self.vector_repository = PgVectorRepositoryAsync(session)
 
     def __create_vector_table_name(self, collection_id: str) -> str:
         """
@@ -140,7 +140,7 @@ class CollectionService:
 
         # Create a vector table for the new collection
         vector_table_name = self.__create_vector_table_name(collection.id)
-        await self.vector_store.create_table(vector_table_name)
+        await self.vector_repository.stage_create_table_if_not_exists(vector_table_name)
 
         # Refresh the collection to apply ORM mappings
         await self.session.refresh(collection)
@@ -199,7 +199,7 @@ class CollectionService:
         file_paths = [file.path for file in collection.files]
 
         await self.collection_repository.stage_delete(collection)
-        await self.vector_store.drop_table(vector_table_name)
+        await self.vector_repository.stage_drop_table_if_exists(vector_table_name)
 
         return file_paths
 
@@ -321,7 +321,7 @@ class CollectionService:
 
             # Delete all files in the collection and their vectors
             await self.file_repository.stage_delete_by_collection_id(collection_id)
-            await self.vector_store.stage_delete_documents(
+            await self.vector_repository.stage_delete_documents(
                 table_name=self.__create_vector_table_name(collection_id)
             )
 
@@ -337,7 +337,7 @@ class CollectionService:
 
                         if file:
                             await self.file_repository.stage_delete(file)
-                            await self.vector_store.stage_delete_documents(
+                            await self.vector_repository.stage_delete_documents(
                                 table_name=self.__create_vector_table_name(
                                     collection_id
                                 ),
@@ -405,7 +405,7 @@ class CollectionService:
         query_vector = embeddings.embed_query(query)
 
         try:
-            results = await self.vector_store.cosine_similarity_search(
+            results = await self.vector_repository.cosine_similarity_search(
                 table_name=vector_table_name,
                 query_vector=query_vector,
                 top_k=top_k,
@@ -417,7 +417,7 @@ class CollectionService:
             ) from e
         except Exception as e:
             raise RuntimeError(
-                f"Failed to perform similarity search in collection {collection_id}"
+                f"Failed to perform similarity search in collection {collection_id}. {str(e)}"
             ) from e
 
         return results

@@ -1,4 +1,3 @@
-import re
 from enum import Enum
 from typing import Union
 from uuid import uuid4
@@ -6,7 +5,9 @@ from uuid import uuid4
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import String
 from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, registry
+from sqlalchemy.orm import Mapped, mapped_column
+
+from .base import Base
 
 
 class DocumentEmbeddingStatus(Enum):
@@ -18,28 +19,26 @@ class DocumentEmbeddingStatus(Enum):
     SUCCESS = "success"
     FAILED = "failed"
 
+    @classmethod
+    def pgtype(cls) -> str:
+        """
+        Return the name of the PostgreSQL type.
+        """
+        return "documentembeddingstatus"
+
 
 class PgVectorOrmFactory:
     def __init__(self):
-        self._registry = registry()
-        self._metadata = self._registry.metadata
+        pass
 
-    def __create_orm(self, table_name: str):
+    def _create_orm(self, table_name: str):
         """
         Create a new ORM class with the specified name.
         """
 
-        @self._registry.mapped
-        class DynamicOrm:
+        class DynamicOrm(Base):
             __tablename__ = table_name
-
-            # TODO: `extend_existing` is used to allow __create_orm to be called multiple times.
-            # However, if the table schema changes unexpectedly, this may cause issues.
-            # Ideally, a caching layer should be implemented to avoid redefining the same ORM type.
-            # For now, it's not implemented because defining dynamic ORM types is somewhat complex.
-            # This may be revisited once a clean dynamic ORM definition pattern is established.
             __table_args__ = {"extend_existing": True}
-
             id: Mapped[str] = mapped_column(
                 UUID(as_uuid=False),
                 primary_key=True,
@@ -53,7 +52,11 @@ class PgVectorOrmFactory:
                 Vector(), nullable=True, comment="document embedding"  # type: ignore
             )
             status: Mapped[DocumentEmbeddingStatus] = mapped_column(
-                ENUM(DocumentEmbeddingStatus),
+                ENUM(
+                    DocumentEmbeddingStatus,
+                    create_type=False,
+                    name=DocumentEmbeddingStatus.pgtype(),
+                ),
                 nullable=False,
                 default=DocumentEmbeddingStatus.PENDING,
                 comment="status of the document embedding",
@@ -73,24 +76,17 @@ class PgVectorOrmFactory:
 
         return DynamicOrm
 
-    def validate_table_name(self, table_name: str):
+    def _create_table_if_not_exists_sql(self, table_name: str):
         """
-        Validate the table name to prevent SQL injection.
-        Only alphanumeric characters and underscores are allowed.
-
-        ### Raises
-        ValueError: If the table name contains invalid characters.
+        Get the SQL statement for creating the ORM.
         """
-        if not re.match(r"^[a-zA-Z0-9_]+$", table_name):
-            raise ValueError(
-                f"Invalid table name: {table_name}. Only alphanumeric characters and underscores are allowed."
-            )
-        return True
-
-    def get_orm(self, table_name: str):
+        return f"""
+        CREATE TABLE IF NOT EXISTS {table_name} (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            text TEXT NOT NULL,
+            embedding VECTOR,
+            status {DocumentEmbeddingStatus.pgtype()} NOT NULL DEFAULT '{DocumentEmbeddingStatus.PENDING.name}',
+            file_id UUID NOT NULL,
+            metadata JSONB
+        );
         """
-        Get the ORM class for the specified table name.
-        """
-        self.validate_table_name(table_name)
-
-        return self.__create_orm(table_name)
