@@ -204,7 +204,7 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
                     "id": row.id,
                     "text": row.text,
                     "file_id": row.file_id,
-                    "status": row.status,
+                    "status": getattr(DocumentEmbeddingStatus, row.status, None),
                     "metadata": row.metadata,
                     "cosine_similarity": row.cosine_similarity,
                 }
