@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery_tasks import process_file
 from database.models.collection import Collection
 from database.models.file import File
-from database.repositories.collection.asyncio import CollectionRepositoryAsync
-from database.repositories.file.asyncio import FileRepositoryAsync
+from repositories.collection.asyncio import CollectionRepositoryAsync
+from repositories.file.asyncio import FileRepositoryAsync
 from schemas.collection import (
     CollectionCreate,
     CollectionFilter,

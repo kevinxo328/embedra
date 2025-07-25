@@ -2,7 +2,8 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...models.collection import Collection
+from database.models import Collection
+
 from .core import CollectionRepositoryCore
 
 

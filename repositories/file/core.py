@@ -2,7 +2,7 @@ from typing import Optional
 
 from sqlalchemy import delete, func, select
 
-from ...models.file import File
+from database.models import File
 
 
 class FileRepositoryCore:

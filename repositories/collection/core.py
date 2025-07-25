@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from ...models import Collection
+from database.models import Collection
 
 
 class CollectionRepositoryCore:

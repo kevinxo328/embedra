@@ -2,7 +2,8 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from ...models.collection import Collection
+from database.models import Collection
+
 from .core import CollectionRepositoryCore
 
 

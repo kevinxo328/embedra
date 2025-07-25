@@ -1,17 +1,18 @@
 from typing import Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...models.file import File
+from database.models import File
+
 from .core import FileRepositoryCore
 
 
-class FileRepositorySync(FileRepositoryCore):
-    def __init__(self, session: Session):
+class FileRepositoryAsync(FileRepositoryCore):
+    def __init__(self, session: AsyncSession):
         super().__init__()
         self.session = session
 
-    def get(
+    async def get(
         self,
         collection_id: str,
         filename: Optional[str] = None,
@@ -33,55 +34,55 @@ class FileRepositorySync(FileRepositoryCore):
             sort_order=sort_order,
         )
 
-        total_result = self.session.execute(total_stmt)
+        total_result = await self.session.execute(total_stmt)
         total_count = total_result.scalar_one()
 
-        result = self.session.execute(stmt)
+        result = await self.session.execute(stmt)
         files = result.scalars().all()
 
         return files, total_count
 
-    def get_by_id(self, id: str):
+    async def get_by_id(self, id: str):
         """Retrieve a file by its ID."""
         stmt = self._get_by_id_expression(id)
 
-        result = self.session.execute(stmt)
+        result = await self.session.execute(stmt)
         return result.scalar_one()
 
-    def get_by_id_or_none(self, id: str):
+    async def get_by_id_or_none(self, id: str):
         """Retrieve a file by its ID or return None if not found."""
         stmt = self._get_by_id_expression(id)
 
-        result = self.session.execute(stmt)
+        result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    def stage_create(self, file: File):
+    async def stage_create(self, file: File):
         """Create a new file."""
         self.session.add(file)
         return file
 
-    def stage_update(self, file: File):
+    async def stage_update(self, file: File):
         """
         Update an existing file.
         #### This method does not commit the transaction.
         """
-        self.session.merge(file)
+        await self.session.merge(file)
         return file
 
-    def stage_delete(self, file: File):
+    async def stage_delete(self, file: File):
         """
         Delete a file.
         #### This method does not commit the transaction.
         """
-        self.session.delete(file)
+        await self.session.delete(file)
         return True
 
-    def stage_delete_by_collection_id(self, collection_id: str):
+    async def stage_delete_by_collection_id(self, collection_id: str):
         """
         Delete all files associated with a specific collection.
 
         #### This method does not commit the transaction.
         """
         stmt = self._delete_expression(collection_id=collection_id)
-        self.session.execute(stmt)
+        await self.session.execute(stmt)
         return True

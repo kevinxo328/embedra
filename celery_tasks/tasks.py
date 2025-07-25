@@ -1,7 +1,7 @@
 from celery.utils.log import get_task_logger
 
-from database.repositories.collection.sync import CollectionRepositorySync
-from database.repositories.file.sync import FileRepositorySync
+from repositories.collection.sync import CollectionRepositorySync
+from repositories.file.sync import FileRepositorySync
 from schemas.file import FileStatus
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
