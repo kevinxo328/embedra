@@ -1,7 +1,9 @@
 from celery.utils.log import get_task_logger
 
-from database.repositories.collection.sync import CollectionRepositorySync
-from database.repositories.file.sync import FileRepositorySync
+from domains.collection import SelectFilter as CollectionSelectFilter
+from domains.file import SelectFilter as FileSelectFilter
+from repositories.collection.sync import CollectionRepositorySync
+from repositories.file.sync import FileRepositorySync
 from schemas.file import FileStatus
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
@@ -19,7 +21,7 @@ def check_file_status(file_id: str, table_name: str):
     """
 
     with Session() as session:
-        file = FileRepositorySync(session).get_by_id(id=file_id)
+        file = FileRepositorySync(session).select_one(FileSelectFilter(id=file_id))
         docs = PgVectorRepositorySync(session).get_documents(
             table_name=table_name, file_id=file_id
         )
@@ -49,9 +51,11 @@ def embed_document(
             doc = PgVectorRepositorySync(session).get_document_by_id(
                 table_name=table_name, id=doc_id
             )
-            file = FileRepositorySync(session).get_by_id(id=doc.file_id)
-            collection = CollectionRepositorySync(session).get_by_id(
-                id=file.collection_id
+            file = FileRepositorySync(session).select_one(
+                FileSelectFilter(id=doc.file_id)
+            )
+            collection = CollectionRepositorySync(session).select_one(
+                CollectionSelectFilter(id=file.collection_id)
             )
             embedding_model = get_embedding_model_by_provider_name(
                 provider_name=collection.embedding_model_provider,
@@ -95,7 +99,7 @@ def extract_file(file_id: str, table_name: str):
     """
     with Session() as session:
         try:
-            file = FileRepositorySync(session).get_by_id(id=file_id)
+            file = FileRepositorySync(session).select_one(FileSelectFilter(id=file_id))
             result = markitdown_converter(source=file.path)
             docs = split_markdown(result.markdown)
             vector_repository = PgVectorRepositorySync(session)

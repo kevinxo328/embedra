@@ -2,7 +2,9 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...models.collection import Collection
+from database.models import Collection
+from domains.collection import SelectFilter
+
 from .core import CollectionRepositoryCore
 
 
@@ -39,16 +41,16 @@ class CollectionRepositoryAsync(CollectionRepositoryCore):
 
         return collections, total_count
 
-    async def get_by_id(self, id: str, with_files: bool = False):
-        """Retrieve a collection by its ID."""
-        stmt = self._get_by_id_expression(id, with_files=with_files)
-
-        result = await self.session.execute(stmt)
-        return result.scalar_one()
-
     async def get_by_id_or_none(self, id: str, with_files: bool = False):
         """Retrieve a collection by its ID or return None if not found."""
         stmt = self._get_by_id_expression(id, with_files=with_files)
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def select_one_or_none(self, filter: SelectFilter):
+        """Retrieve a collection or return None if not found."""
+        stmt = self._select_expression(filter)
 
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()

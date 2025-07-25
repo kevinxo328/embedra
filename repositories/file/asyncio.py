@@ -1,8 +1,8 @@
-from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ...models.file import File
+from database.models import File
+from domains.file import OffsetBasedPagination, SelectFilter
+
 from .core import FileRepositoryCore
 
 
@@ -11,26 +11,23 @@ class FileRepositoryAsync(FileRepositoryCore):
         super().__init__()
         self.session = session
 
-    async def get(
+    async def select(self, filter: SelectFilter):
+        """Retrieve a list of files with optional filters."""
+        stmt = self._select_expression(filter)
+
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
+    async def select_with_pagination(
         self,
-        collection_id: str,
-        filename: Optional[str] = None,
-        content_type: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-        sort_by: str = "created_at",
-        sort_order: str = "desc",
+        filter: SelectFilter,
+        pagination: OffsetBasedPagination,
     ):
         """Retrieve a list of collections with pagination."""
 
-        stmt, total_stmt = self._get_expression(
-            collection_id=collection_id,
-            filename=filename,
-            content_type=content_type,
-            limit=limit,
-            offset=offset,
-            sort_by=sort_by,
-            sort_order=sort_order,
+        stmt, total_stmt = self._select_with_pagination_expression(
+            filter=filter,
+            pagination=pagination,
         )
 
         total_result = await self.session.execute(total_stmt)
@@ -41,31 +38,16 @@ class FileRepositoryAsync(FileRepositoryCore):
 
         return files, total_count
 
-    async def get_by_id(self, id: str):
-        """Retrieve a file by its ID."""
-        stmt = self._get_by_id_expression(id)
+    async def select_one(self, filter: SelectFilter):
+        """Retrieve a file."""
+        stmt = self._select_expression(filter)
 
         result = await self.session.execute(stmt)
         return result.scalar_one()
 
-    async def get_by_id_or_none(self, id: str):
-        """Retrieve a file by its ID or return None if not found."""
-        stmt = self._get_by_id_expression(id)
-
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
     async def stage_create(self, file: File):
         """Create a new file."""
         self.session.add(file)
-        return file
-
-    async def stage_update(self, file: File):
-        """
-        Update an existing file.
-        #### This method does not commit the transaction.
-        """
-        await self.session.merge(file)
         return file
 
     async def stage_delete(self, file: File):
