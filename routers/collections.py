@@ -123,7 +123,7 @@ async def update_collection(
     response_model=schemas.common.DeleteResponse,
 )
 async def delete_collection_by_id(
-    id: str,
+    collection_id: str,
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_db_session),
 ):
@@ -132,13 +132,13 @@ async def delete_collection_by_id(
     This will also drop the vector table associated with the collection.
     """
     try:
-        paths = await CollectionService(session).delete_collection_by_id(id)
+        paths = await CollectionService(session).delete_collection_by_id(collection_id)
 
         # TODO: Handle file deletion in a more robust way. (e.g., Celery task + retry logic)
         # Schedule file deletion in the background
         for path in paths:
             background_tasks.add_task(delete_local_file, path)
-        return schemas.common.DeleteResponse(deleted_ids=[id])
+        return schemas.common.DeleteResponse(deleted_ids=[collection_id])
     except CollectionNotFoundException as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
