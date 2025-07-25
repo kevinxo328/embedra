@@ -65,7 +65,9 @@ async def get_collection_by_id(
     The collection object.
     """
 
-    collection = await CollectionService(session).get_collection_by_id(collection_id)
+    collection = await CollectionService(session).get_collection_by_id_or_none(
+        collection_id
+    )
 
     if not collection:
         raise HTTPException(

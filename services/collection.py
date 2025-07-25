@@ -6,6 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery_tasks import process_file
 from database.models.collection import Collection
 from database.models.file import File
+from domains.collection import SelectFilter as CollectionSelectFilter
+from domains.file import OffsetBasedPagination as FileOffsetPagination
+from domains.file import SelectFilter as FileSelectFilter
 from repositories.collection.asyncio import CollectionRepositoryAsync
 from repositories.file.asyncio import FileRepositoryAsync
 from schemas.collection import (
@@ -49,15 +52,13 @@ class CollectionService:
 
         return f"collection_{str(collection_id).replace('-', '_')}"
 
-    async def __validate_collection_exists(
-        self, collection_id: str, with_files: bool = False
-    ):
+    async def __validate_collection_exists(self, collection_id: str):
         """
         Validate if a collection exists by its ID.
         Raises CollectionNotFoundException if not found.
         """
-        collection = await self.collection_repository.get_by_id_or_none(
-            id=collection_id, with_files=with_files
+        collection = await self.collection_repository.select_one_or_none(
+            CollectionSelectFilter(id=collection_id),
         )
         if not collection:
             raise CollectionNotFoundException(collection_id)
@@ -100,19 +101,12 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    async def get_collection_by_id(self, id: str, with_files: bool = False):
+    async def get_collection_by_id_or_none(self, id: str):
         """
-        Retrieve a specific collection by its ID.
-
-        ### Args:
-        - collection_id: The ID of the collection to retrieve.
-        - with_files: If True, also load associated files as well.
-
-        ### Returns:
-        The collection object or none if not found.
+        Retrieve a specific collection by its ID or return None if not found.
         """
-        return await self.collection_repository.get_by_id_or_none(
-            id=id, with_files=with_files
+        return await self.collection_repository.select_one_or_none(
+            CollectionSelectFilter(id=id)
         )
 
     async def create_collection(self, data: CollectionCreate):
@@ -194,11 +188,14 @@ class CollectionService:
         ### Raises:
         - CollectionNotFoundException: If the collection with the specified ID does not exist.
         """
-        collection = await self.__validate_collection_exists(id, with_files=True)
+        collection = await self.__validate_collection_exists(id)
+        files = await self.file_repository.select(
+            FileSelectFilter(collection_id=collection.id)
+        )
         vector_table_name = self.__create_vector_table_name(collection.id)
 
         # Store file paths before deletion for cleanup
-        file_paths = [file.path for file in collection.files]
+        file_paths = [file.path for file in files]
 
         await self.collection_repository.stage_delete(collection)
         await self.vector_repository.stage_drop_table_if_exists(vector_table_name)
@@ -222,14 +219,22 @@ class CollectionService:
         """
         await self.__validate_collection_exists(collection_id)
 
-        files, total = await self.file_repository.get(
+        select_filter = FileSelectFilter(
             collection_id=collection_id,
             filename=filter.filename,
             content_type=filter.content_type,
+        )
+
+        offset_pagination = FileOffsetPagination(
             limit=pagination.limit,
             offset=pagination.offset,
             sort_by=pagination.sort_by,
             sort_order=pagination.sort_order,
+        )
+
+        files, total = await self.file_repository.select_with_pagination(
+            filter=select_filter,
+            pagination=offset_pagination,
         )
 
         return PaginatedResponse(
@@ -303,8 +308,9 @@ class CollectionService:
         """
 
         # Validate collection ID
-        collection = await self.__validate_collection_exists(
-            collection_id=collection_id, with_files=True
+        collection = await self.__validate_collection_exists(collection_id)
+        files = await self.file_repository.select(
+            FileSelectFilter(collection_id=collection.id)
         )
 
         if not file_ids and not all:
@@ -317,9 +323,9 @@ class CollectionService:
         failed_messages = []
         delete_file_paths = []
 
-        if all and collection.files:
-            delete_file_paths = [file.path for file in collection.files]
-            deleted_file_ids = [str(file.id) for file in collection.files]
+        if all and files:
+            delete_file_paths = [file.path for file in files]
+            deleted_file_ids = [str(file.id) for file in files]
 
             # Delete all files in the collection and their vectors
             await self.file_repository.stage_delete_by_collection_id(collection_id)
@@ -335,24 +341,18 @@ class CollectionService:
                 # while keeping the session open for other operations.
                 try:
                     async with self.session.begin_nested():
-                        file = await self.file_repository.get_by_id(id=file_id)
+                        file = await self.file_repository.select_one(
+                            filter=FileSelectFilter(id=file_id)
+                        )
 
-                        if file:
-                            await self.file_repository.stage_delete(file)
-                            await self.vector_repository.stage_delete_documents(
-                                table_name=self.__create_vector_table_name(
-                                    collection_id
-                                ),
-                                file_id=file_id,
-                            )
+                        await self.file_repository.stage_delete(file)
+                        await self.vector_repository.stage_delete_documents(
+                            table_name=self.__create_vector_table_name(collection_id),
+                            file_id=file_id,
+                        )
 
-                            delete_file_paths.append(file.path)
-                            deleted_file_ids.append(file_id)
-                        else:
-                            failed_file_ids.append(file_id)
-                            failed_messages.append(
-                                f"File with ID {file_id} not found in collection {collection_id}."
-                            )
+                        delete_file_paths.append(file.path)
+                        deleted_file_ids.append(file_id)
 
                 except Exception as e:
                     failed_file_ids.append(file_id)

@@ -3,59 +3,55 @@ from typing import Optional
 from sqlalchemy import delete, func, select
 
 from database.models import File
+from domains.file import OffsetBasedPagination, SelectFilter
 
 
 class FileRepositoryCore:
     def __init__(self):
         self.model = File
 
-    def _get_expression(
-        self,
-        collection_id: str,
-        filename: Optional[str] = None,
-        content_type: Optional[str] = None,
-        limit: int = 100,
-        offset: int = 0,
-        sort_by: str = "created_at",
-        sort_order: str = "desc",
-    ):
+    def _select_expression(self, filter: SelectFilter):
         """
         Returns a SQLAlchemy expression for retrieving files with optional filters.
-
-        ### Returns:
-        - `stmt`: The main statement to retrieve files.
-        - `total_stmt`: The statement to count total files before applying limit and offset.
         """
+        stmt = select(self.model)
 
-        base_stmt = select(self.model).where(self.model.collection_id == collection_id)
+        if filter.id:
+            stmt = stmt.where(self.model.id == filter.id)
 
-        if filename:
-            base_stmt = base_stmt.where(self.model.filename.ilike(f"%{filename}%"))
+        if filter.filename:
+            stmt = stmt.where(self.model.filename.ilike(f"%{filter.filename}%"))
 
-        if content_type:
-            base_stmt = base_stmt.where(
-                self.model.content_type.ilike(f"%{content_type}%")
-            )
+        if filter.content_type:
+            stmt = stmt.where(self.model.content_type.ilike(f"%{filter.content_type}%"))
 
-        # Count total files before applying limit and offset
-        total_stmt = select(func.count()).select_from(base_stmt.subquery())
+        if filter.collection_id:
+            stmt = stmt.where(self.model.collection_id == filter.collection_id)
 
-        # Apply limit and offset for pagination
-        stmt = base_stmt
+        return stmt
 
-        if sort_by:
-            if sort_order == "asc":
-                stmt = stmt.order_by(getattr(self.model, sort_by).asc())
+    def _select_with_pagination_expression(
+        self, filter: SelectFilter, pagination: OffsetBasedPagination
+    ):
+        """
+        Returns a SQLAlchemy expression for retrieving files with optional filters and pagination.
+        """
+        stmt = self._select_expression(filter)
+
+        total_stmt = select(func.count()).select_from(stmt.subquery())
+
+        if pagination.sort_by:
+            if pagination.sort_order == "asc":
+                stmt = stmt.order_by(getattr(self.model, pagination.sort_by).asc())
             else:
-                stmt = stmt.order_by(getattr(self.model, sort_by).desc())
+                stmt = stmt.order_by(getattr(self.model, pagination.sort_by).desc())
 
-        stmt = stmt.limit(limit).offset(offset)
+        if pagination.limit is not None:
+            stmt = stmt.limit(pagination.limit)
+        if pagination.offset is not None:
+            stmt = stmt.offset(pagination.offset)
 
         return stmt, total_stmt
-
-    def _get_by_id_expression(self, id: str):
-        """Retrieve a file by its ID."""
-        return select(self.model).where(self.model.id == id)
 
     def _delete_expression(self, collection_id: Optional[str] = None):
         """
