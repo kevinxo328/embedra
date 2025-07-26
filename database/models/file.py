@@ -55,9 +55,9 @@ class FileModel(Base):
     # Relationship to collection
     collection_id: Mapped[str] = mapped_column(ForeignKey("collections.id"))
     collection: Mapped["CollectionModel"] = relationship(
-        "Collection",
+        "CollectionModel",
         back_populates="files",
     )
 
     def __repr__(self) -> str:
-        return f"<File(id={self.id}, filename={self.filename}, size={self.size}, content_type={self.content_type})>"
+        return f"<FileModel(id={self.id}, filename={self.filename}, size={self.size}, content_type={self.content_type})>"
