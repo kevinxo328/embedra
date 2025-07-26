@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from database.db import init_db
 from middleware.logging_middleware import LoggingMiddleware
 from routers import collections, embeddings
-from settings import APP_ENVIRONMENT, logger, request_context
+from settings import env, logger, request_context
 from vector_database.pgvector.db import init_db as init_pgvector_db
 
 
@@ -23,8 +23,8 @@ async def lifespan(app: FastAPI):
 # Docs and ReDoc URLs are only available in non-production environments
 app = FastAPI(
     lifespan=lifespan,
-    docs_url="/api/docs" if APP_ENVIRONMENT != "production" else None,
-    redoc_url="/api/redoc" if APP_ENVIRONMENT != "production" else None,
+    docs_url="/api/docs" if env.APP_ENVIRONMENT != "production" else None,
+    redoc_url="/api/redoc" if env.APP_ENVIRONMENT != "production" else None,
 )
 
 
@@ -35,7 +35,7 @@ app.include_router(collections.router, prefix="/api")
 app.include_router(embeddings.router, prefix="/api")
 
 # Include utils router only in non-production environment
-if APP_ENVIRONMENT != "production":
+if env.APP_ENVIRONMENT != "production":
     from routers import utils
 
     app.include_router(utils.router, prefix="/api")

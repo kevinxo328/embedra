@@ -3,7 +3,7 @@ from typing import Annotated, Union
 from fastapi import APIRouter, Body, HTTPException, status
 
 from schemas.embedding import EmbeddingModelMetadata
-from settings import AZURE_OPENAI_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY
+from settings import env
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
@@ -27,13 +27,13 @@ async def get_embedding_providers():
     """
     providers = []
 
-    if GOOGLE_API_KEY:
+    if env.GOOGLE_API_KEY:
         providers.append(EmbeddingModelProvider.GOOGLE.value)
 
-    if AZURE_OPENAI_API_KEY:
+    if env.AZURE_OPENAI_API_KEY:
         providers.append(EmbeddingModelProvider.AZURE_OPENAI.value)
 
-    if OPENAI_API_KEY:
+    if env.OPENAI_API_KEY:
         providers.append(EmbeddingModelProvider.OPENAI.value)
 
     return providers
