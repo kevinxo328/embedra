@@ -102,9 +102,6 @@ class CollectionService:
         )
 
     async def get_collection_by_id_or_none(self, id: str):
-        """
-        Retrieve a specific collection by its ID or return None if not found.
-        """
         return await self.collection_repository.select_one_or_none(
             CollectionSelectFilter(id=id)
         )

@@ -57,12 +57,6 @@ async def get_collection_by_id(
 ):
     """
     Retrieve a specific collection by its ID.
-
-    ### Args:
-    - collection_id: The ID of the collection to retrieve.
-
-    ### Returns:
-    The collection object.
     """
 
     collection = await CollectionService(session).get_collection_by_id_or_none(
