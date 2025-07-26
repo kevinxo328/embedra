@@ -33,7 +33,7 @@ router = APIRouter(
     response_model=schemas.common.PaginatedResponse[schemas.collection.Collection],
     description=inspect.getdoc(CollectionService.select_collections_with_pagination),
 )
-async def get_collections(
+async def select_collections(
     filter: schemas.collection.CollectionFilter = Depends(),
     pagination: schemas.collection.CollectionPaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
