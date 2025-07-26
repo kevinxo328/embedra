@@ -293,6 +293,34 @@ async def download_file_from_collection(
         )
 
 
+@router.post(
+    "/{collection_id}/files/{file_id}/task/retry", status_code=status.HTTP_200_OK
+)
+async def retry_file_task(
+    collection_id: str,
+    file_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Retry the embedding task for a specific file in a collection.
+    """
+    try:
+        return await CollectionService(session).retry_file_task(
+            collection_id=collection_id,
+            file_id=file_id,
+        )
+    except NoResultFound as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File with ID {file_id} not found in collection {collection_id}",
+        )
+    except CollectionServiceException as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+
 @router.get("/{collection_id}/cosine_similarity_search")
 async def cosine_similarity_search(
     collection_id: str,
