@@ -1,7 +1,8 @@
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from settings import env, logger
+from env import env
+from settings import logger
 
 from .model.factory import PgVectorModelFactory
 

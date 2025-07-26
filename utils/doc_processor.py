@@ -26,7 +26,7 @@ import requests
 from langchain.text_splitter import MarkdownTextSplitter
 from markitdown import MarkItDown
 
-from settings import env
+from env import env
 
 # Initialize MarkItDown converter with plugins disabled for simplicity
 # TODO: Consider enabling plugins for enhanced document processing capabilities

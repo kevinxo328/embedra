@@ -35,12 +35,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy source code
 COPY --chown=appuser:appuser . .
 
-# Set permissions for application directories
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
-RUN mkdir -p /app/docs && chown -R appuser:appuser /app/docs
-
-# TODO: Currently running as root for simplicity, because of issues with log files and save docs permissions.
 # Switch to non-root user
-# USER appuser
+USER appuser
 
 CMD ["celery", "-A", "celery_tasks", "worker", "--loglevel=info"]

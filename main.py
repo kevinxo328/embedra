@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from database.db import init_db
+from env import env
 from middleware.logging_middleware import LoggingMiddleware
 from routers import collections, embeddings
-from settings import env, logger, request_context
+from settings import logger, request_context
 from vector_database.pgvector.db import init_db as init_pgvector_db
 
 

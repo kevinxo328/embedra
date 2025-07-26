@@ -2,10 +2,10 @@ from celery.utils.log import get_task_logger
 
 from domains.collection import SelectFilter as CollectionSelectFilter
 from domains.file import SelectFilter as FileSelectFilter
+from env import env
 from repositories.collection.sync import CollectionRepositorySync
 from repositories.file.sync import FileRepositorySync
 from schemas.file import FileStatus
-from settings import env
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
 from vector_database.pgvector.model.factory import DocumentEmbeddingStatus

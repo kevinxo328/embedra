@@ -2,8 +2,8 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Body, HTTPException, status
 
+from env import env
 from schemas.embedding import EmbeddingModelMetadata
-from settings import env
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
