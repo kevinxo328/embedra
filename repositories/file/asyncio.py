@@ -39,7 +39,7 @@ class FileRepositoryAsync(FileRepositoryCore):
         return files, total_count
 
     async def select_one(self, filter: SelectFilter):
-        """Retrieve a file."""
+        """Retrieve a file. If no file is found, raise an exception."""
         stmt = self._select_expression(filter)
 
         result = await self.session.execute(stmt)

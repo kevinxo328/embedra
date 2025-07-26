@@ -241,6 +241,22 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
+    async def get_collection_file_by_id(self, collection_id: str, file_id: str):
+        """
+        Retrieve a specific file from a collection by its ID.
+
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - NoResultFound: If the file with the specified ID does not exist in the collection.
+        """
+        await self.__validate_collection_exists(collection_id)
+
+        file = await self.file_repository.select_one(
+            FileSelectFilter(id=file_id, collection_id=collection_id)
+        )
+
+        return file
+
     async def upload_file_to_collection(
         self, collection_id: str, file: ValidatedUploadFile
     ):
