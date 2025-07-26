@@ -2,7 +2,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import Collection
+from database.models import CollectionModel
 from domains.collection import SelectFilter
 
 from .core import CollectionRepositoryCore
@@ -55,12 +55,12 @@ class CollectionRepositoryAsync(CollectionRepositoryCore):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def stage_create(self, collection: Collection):
+    async def stage_create(self, collection: CollectionModel):
         """Create a new collection."""
         self.session.add(collection)
         return collection
 
-    async def stage_update(self, collection: Collection):
+    async def stage_update(self, collection: CollectionModel):
         """
         Update an existing collection.
         #### This method does not commit the transaction.
@@ -68,7 +68,7 @@ class CollectionRepositoryAsync(CollectionRepositoryCore):
         await self.session.merge(collection)
         return collection
 
-    async def stage_delete(self, collection: Collection):
+    async def stage_delete(self, collection: CollectionModel):
         """
         Delete a collection.
         #### This method does not commit the transaction.

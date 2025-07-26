@@ -9,12 +9,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from schemas.file import FileStatus
 
 if TYPE_CHECKING:
-    from .collection import Collection
+    from .collection import CollectionModel
 
 from .base import Base
 
 
-class File(Base):
+class FileModel(Base):
 
     __tablename__ = "files"
 
@@ -54,7 +54,7 @@ class File(Base):
 
     # Relationship to collection
     collection_id: Mapped[str] = mapped_column(ForeignKey("collections.id"))
-    collection: Mapped["Collection"] = relationship(
+    collection: Mapped["CollectionModel"] = relationship(
         "Collection",
         back_populates="files",
     )

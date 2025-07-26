@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from settings import DATABASE_URL, logger
 
-from .model.factory import PgVectorOrmFactory
+from .model.factory import PgVectorModelFactory
 
 
 async def init_db():
@@ -16,6 +16,8 @@ async def init_db():
     engine = create_async_engine(DATABASE_URL)
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.execute(text(PgVectorOrmFactory()._create_enum_if_not_exists_sql()))
+        await conn.execute(
+            text(PgVectorModelFactory()._create_enum_if_not_exists_sql())
+        )
 
     logger.info("Done migrating pgvector database")

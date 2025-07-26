@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import File
+from database.models import FileModel
 from domains.file import OffsetBasedPagination, SelectFilter
 
 from .core import FileRepositoryCore
@@ -45,12 +45,12 @@ class FileRepositoryAsync(FileRepositoryCore):
         result = await self.session.execute(stmt)
         return result.scalar_one()
 
-    async def stage_create(self, file: File):
+    async def stage_create(self, file: FileModel):
         """Create a new file."""
         self.session.add(file)
         return file
 
-    async def stage_delete(self, file: File):
+    async def stage_delete(self, file: FileModel):
         """
         Delete a file.
         #### This method does not commit the transaction.
