@@ -74,7 +74,7 @@ class Settings(
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
-        extra = "allow"
+        extra = "ignore"
 
 
 env = Settings()  # pyright: ignore[reportCallIssue]
@@ -88,3 +88,5 @@ logger = initialize_logger(
     context=request_context,
     level="INFO" if env.APP_ENVIRONMENT != "production" else "WARNING",
 )
+
+logger.warning(f"Application environment: {env.APP_ENVIRONMENT}")
