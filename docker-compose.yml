@@ -30,3 +30,10 @@ services:
       - "8000:8000"
     depends_on:
       - celery-tasks
+    volumes:
+      - app-data:/app/docs
+      - app-logs:/app/logs
+
+volumes:
+  app-data:
+  app-logs:
