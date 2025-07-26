@@ -34,6 +34,7 @@ class CelerySettings(BaseSettings):
 
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
+    CELERY_FASTAPI_HOST: str
 
     @field_validator("CELERY_BROKER_URL", mode="before")
     @classmethod
@@ -83,8 +84,6 @@ class Settings(
 
 env = Settings()  # pyright: ignore[reportCallIssue]
 
-PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-
 
 # Initialize request context for logging
 request_context = RequestContext()
@@ -92,6 +91,8 @@ logger = initialize_logger(
     context=request_context,
     level="INFO" if env.APP_ENVIRONMENT != "production" else "WARNING",
 )
+# Set up project root directory.
+PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 logger.warning(f"Application environment: {env.APP_ENVIRONMENT}")
 logger.warning(f"Project root directory: {PROJECT_ROOT_DIR}")

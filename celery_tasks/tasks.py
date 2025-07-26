@@ -5,6 +5,7 @@ from domains.file import SelectFilter as FileSelectFilter
 from repositories.collection.sync import CollectionRepositorySync
 from repositories.file.sync import FileRepositorySync
 from schemas.file import FileStatus
+from settings import env
 from utils.doc_processor import markitdown_converter, split_markdown
 from utils.embeddings import get_embedding_model_by_provider_name
 from vector_database.pgvector.model.factory import DocumentEmbeddingStatus
@@ -100,7 +101,8 @@ def extract_file(file_id: str, table_name: str):
     with Session() as session:
         try:
             file = FileRepositorySync(session).select_one(FileSelectFilter(id=file_id))
-            result = markitdown_converter(source=file.path)
+            source = f"{env.CELERY_FASTAPI_HOST}/api/collections/{file.collection_id}/files/{file.id}/download"
+            result = markitdown_converter(source=source)
             docs = split_markdown(result.markdown)
             vector_repository = PgVectorRepositorySync(session)
 
