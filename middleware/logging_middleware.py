@@ -3,11 +3,12 @@ import time
 import uuid
 from typing import Callable
 
-from fastapi import Request, Response
+from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from exceptions.common import FileStatusNotRetryableError, ResourceNotFoundError
 from utils.request_context import RequestContext
 
 
@@ -52,12 +53,30 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         try:
             response = await call_next(request)
+        except ResourceNotFoundError as e:
+            self.logger.error(
+                f"Resource not found during request processing: {e.resource_name} with ID {e.resource_id}",
+            )
+            response = JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={"detail": str(e)},
+            )
+        except FileStatusNotRetryableError as e:
+            self.logger.error(
+                f"File status not retryable during request processing: {e.file_id}, status: {e.status}, retryable statuses: {', '.join(e.retryable_statuses)}",
+            )
+            response = JSONResponse(
+                status_code=status.HTTP_409_CONFLICT,
+                content={
+                    "detail": str(e),
+                },
+            )
         except IntegrityError as e:
             self.logger.error(
                 f"Integrity error occurred during request processing: {e}",
             )
             response = JSONResponse(
-                status_code=400,
+                status_code=status.HTTP_400_BAD_REQUEST,
                 content={"detail": f"Integrity error occurred: {e.orig}"},
             )
         except Exception as e:
@@ -65,7 +84,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 f"Unexpected error occurred during request processing: {e}",
             )
             response = JSONResponse(
-                status_code=500,
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 content={"detail": "Internal Server Error"},
             )
 

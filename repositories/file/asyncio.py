@@ -45,6 +45,13 @@ class FileRepositoryAsync(FileRepositoryCore):
         result = await self.session.execute(stmt)
         return result.scalar_one()
 
+    async def select_one_or_none(self, filter: SelectFilter):
+        """Retrieve a file or return None if not found."""
+        stmt = self._select_expression(filter)
+
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def stage_create(self, file: FileModel):
         """Create a new file."""
         self.session.add(file)

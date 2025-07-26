@@ -9,6 +9,7 @@ from database.models.file import FileModel
 from domains.collection import SelectFilter as CollectionSelectFilter
 from domains.file import OffsetBasedPagination as FileOffsetPagination
 from domains.file import SelectFilter as FileSelectFilter
+from exceptions.common import FileStatusNotRetryableError, ResourceNotFoundError
 from repositories.collection.asyncio import CollectionRepositoryAsync
 from repositories.file.asyncio import FileRepositoryAsync
 from schemas.collection import (
@@ -32,16 +33,6 @@ from utils.file_uploader import delete_local_file, save_file_to_local
 from vector_database.pgvector.repositories.asyncio import PgVectorRepositoryAsync
 
 
-class CollectionServiceException(Exception):
-    pass
-
-
-class CollectionNotFoundException(CollectionServiceException):
-    def __init__(self, collection_id: str):
-        super().__init__(f"Collection with ID {collection_id} not found")
-        self.collection_id = collection_id
-
-
 class CollectionService:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -60,16 +51,18 @@ class CollectionService:
     async def __validate_collection_exists(self, collection_id: str):
         """
         Validate if a collection exists by its ID.
-        Raises CollectionNotFoundException if not found.
+        Raises ResourceNotFoundError if not found.
         """
         collection = await self.collection_repository.select_one_or_none(
             CollectionSelectFilter(id=collection_id),
         )
         if not collection:
-            raise CollectionNotFoundException(collection_id)
+            raise ResourceNotFoundError(
+                resource_name="Collection", resource_id=collection_id
+            )
         return collection
 
-    async def get_collections(
+    async def select_collections_with_pagination(
         self, filter: CollectionFilter, pagination: CollectionPaginationParams
     ):
         """
@@ -90,7 +83,7 @@ class CollectionService:
         - page_size: Number of items per page.
         """
 
-        collections, total = await self.collection_repository.get(
+        collections, total = await self.collection_repository.select_with_pagination(
             name=filter.name,
             embedding_model=filter.embedding_model,
             limit=pagination.limit,
@@ -106,7 +99,7 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    async def get_collection_by_id_or_none(self, id: str):
+    async def select_collection_one_or_none(self, id: str):
         return await self.collection_repository.select_one_or_none(
             CollectionSelectFilter(id=id)
         )
@@ -116,7 +109,7 @@ class CollectionService:
         Create a new collection.
         This will also create a vector table for the collection in the vector store.
 
-        ### Args:
+        #### Args:
         - name: The name of the collection.
         - description: A brief description of the collection.
         - embedding_model_provider: The provider of the embedding model. See [**/api/embeddings/providers**](#/embeddings/get_embedding_providers_api_embeddings_providers_get) for available providers.
@@ -127,7 +120,7 @@ class CollectionService:
         try:
             EmbeddingModelProvider(data.embedding_model_provider)
         except ValueError:
-            raise CollectionServiceException(
+            raise ValueError(
                 f"Invalid embedding model provider '{data.embedding_model_provider}'. Only supported providers are: {', '.join(e.value for e in EmbeddingModelProvider)}"
             )
 
@@ -156,7 +149,7 @@ class CollectionService:
         The updated collection object.
 
         ### Raises:
-        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - ResourceNotFoundError: If the collection with the specified ID does not exist.
         """
         collection = await self.__validate_collection_exists(id)
 
@@ -171,7 +164,7 @@ class CollectionService:
         return collection
 
     # TODO: Need to check if any files are processing in celery before deleting the collection.
-    async def delete_collection_by_id(self, id: str):
+    async def delete_collection(self, id: str):
         """
         Delete a collection and its associated vector table.
         Files deletion is not critical for data consistency, but should be done to avoid orphan files.
@@ -188,37 +181,37 @@ class CollectionService:
         List of file paths that require deletion to complete cleanup.
 
         ### Raises:
-        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - ResourceNotFoundError: If the collection with the specified ID does not exist.
         """
         collection = await self.__validate_collection_exists(id)
         files = await self.file_repository.select(
             FileSelectFilter(collection_id=collection.id)
         )
-        vector_table_name = self.__create_vector_table_name(collection.id)
-
         # Store file paths before deletion for cleanup
         file_paths = [file.path for file in files]
 
-        await self.collection_repository.stage_delete(collection)
+        vector_table_name = self.__create_vector_table_name(collection.id)
         await self.vector_repository.stage_drop_table_if_exists(vector_table_name)
+        await self.collection_repository.stage_delete(collection)
 
         return file_paths
 
-    async def get_collection_files(
+    async def select_collection_files(
         self, collection_id: str, filter: FileFilter, pagination: FilePaginationParams
     ):
         """
         Retrieve files associated with a specific collection.
 
-        Returns:
-            data: A paginated list of files in the collection.
-            total: Total number of files in the collection before pagination.
-            page: Current page number.
-            page_size: Number of items per page.
+        #### Returns:
+        - data: A paginated list of files in the collection.
+        - total: Total number of files in the collection before pagination.
+        - page: Current page number.
+        - page_size: Number of items per page.
 
-        Raises:
-            NoResultFound: If the collection ID is not found
+        #### Raises:
+        - ResourceNotFoundError: If the collection ID is not found
         """
+
         await self.__validate_collection_exists(collection_id)
 
         select_filter = FileSelectFilter(
@@ -246,30 +239,32 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    async def get_collection_file_by_id(self, collection_id: str, file_id: str):
+    async def get_collection_file(self, collection_id: str, file_id: str):
         """
-        Retrieve a specific file from a collection by its ID.
+        Retrieve a specific file from a collection by filter.
 
         ### Raises:
-        - CollectionNotFoundException: If the collection with the specified ID does not exist.
-        - NoResultFound: If the file with the specified ID does not exist in the collection.
+        - ResourceNotFoundError: If the collection of file with the specified ID does not exist.
         """
         await self.__validate_collection_exists(collection_id)
 
-        file = await self.file_repository.select_one(
+        file = await self.file_repository.select_one_or_none(
             FileSelectFilter(id=file_id, collection_id=collection_id)
         )
 
+        if not file:
+            raise ResourceNotFoundError(resource_name="File", resource_id=file_id)
+
         return file
 
-    async def upload_file_to_collection(
+    async def upload_collection_file(
         self, collection_id: str, file: ValidatedUploadFile
     ):
         """
         Upload a file to a specific collection.
 
-        ### Raises:
-        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        #### Raises:
+        - ResourceNotFoundError: If the collection with the specified ID does not exist.
         """
         # TODO: Digest the file content and store it in the vector store in the background.
 
@@ -309,10 +304,12 @@ class CollectionService:
         - file_id (str): The ID of the file to retry processing.
 
         ### Raises:
-        - NotFoundException: If the collection with the specified ID does not exist.
+        - ResourceNotFoundError: If the collection or file with the specified ID does not exist.
+        - FileStatusNotRetryableError: If the file status is not retryable.
         """
-        file = await self.file_repository.select_one(
-            FileSelectFilter(id=file_id, collection_id=collection_id)
+        file = await self.get_collection_file(
+            collection_id=collection_id,
+            file_id=file_id,
         )
 
         table_name = self.__create_vector_table_name(collection_id)
@@ -329,10 +326,14 @@ class CollectionService:
                 kwargs={"file_id": file.id, "table_name": table_name}
             )
         else:
-            raise CollectionServiceException(
-                f"File {file_id} is not in a retryable state. "
-                f"Current status: {file.status.value}. "
-                f"Only files with status {FileStatus.CHUNK_FAILED.value}, {FileStatus.FAILED.value}, or {FileStatus.EMBEDDING_PARTIAL_FAILED.value} can be retried."
+            raise FileStatusNotRetryableError(
+                file_id=file.id,
+                status=file.status.value,
+                retryable_statuses=[
+                    FileStatus.CHUNK_FAILED.value,
+                    FileStatus.FAILED.value,
+                    FileStatus.EMBEDDING_PARTIAL_FAILED.value,
+                ],
             )
 
         return True
@@ -358,18 +359,16 @@ class CollectionService:
 
 
         ### Raises:
-        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - ResourceNotFoundError: If the collection with the specified ID does not exist.
         - CollectionServiceException: If no files are specified for deletion and `all` is False.
         """
-
-        # Validate collection ID
         collection = await self.__validate_collection_exists(collection_id)
+
         files = await self.file_repository.select(
             FileSelectFilter(collection_id=collection.id)
         )
-
         if not file_ids and not all:
-            raise CollectionServiceException(
+            raise ValueError(
                 "No files specified for deletion. Provide file IDs or set 'all' to True."
             )
 
@@ -439,7 +438,7 @@ class CollectionService:
         Perform a similarity search in the specified collection.
 
         ### Raises:
-        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - ResourceNotFoundError: If the collection with the specified ID does not exist.
         """
         collection = await self.__validate_collection_exists(collection_id)
         vector_table_name = self.__create_vector_table_name(collection_id)
