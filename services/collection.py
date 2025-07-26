@@ -4,8 +4,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from celery_tasks import process_file
-from database.models.collection import Collection
-from database.models.file import File
+from database.models.collection import CollectionModel
+from database.models.file import FileModel
 from domains.collection import SelectFilter as CollectionSelectFilter
 from domains.file import OffsetBasedPagination as FileOffsetPagination
 from domains.file import SelectFilter as FileSelectFilter
@@ -129,7 +129,7 @@ class CollectionService:
                 f"Invalid embedding model provider '{data.embedding_model_provider}'. Only supported providers are: {', '.join(e.value for e in EmbeddingModelProvider)}"
             )
 
-        collection = Collection(**data.model_dump())
+        collection = CollectionModel(**data.model_dump())
 
         await self.collection_repository.stage_create(collection)
         await self.session.flush()  # Ensure the collection ID is generated
@@ -259,7 +259,7 @@ class CollectionService:
 
         try:
             save_file_path = save_file_to_local(file, save_dir=f"docs/{collection_id}")
-            new_file = File(
+            new_file = FileModel(
                 filename=file.filename,
                 size=file.size,
                 path=save_file_path,

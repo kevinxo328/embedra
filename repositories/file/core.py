@@ -2,13 +2,13 @@ from typing import Optional
 
 from sqlalchemy import delete, func, select
 
-from database.models import File
+from database.models import FileModel
 from domains.file import OffsetBasedPagination, SelectFilter
 
 
 class FileRepositoryCore:
     def __init__(self):
-        self.model = File
+        self.model = FileModel
 
     def _select_expression(self, filter: SelectFilter):
         """

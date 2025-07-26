@@ -3,13 +3,13 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
-from database.models import Collection
+from database.models import CollectionModel
 from domains.collection import OffsetBasedPagination, SelectFilter
 
 
 class CollectionRepositoryCore:
     def __init__(self):
-        self.model = Collection
+        self.model = CollectionModel
 
     def _get_expression(
         self,

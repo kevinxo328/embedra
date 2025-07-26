@@ -34,9 +34,9 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
 
         return True
 
-    def _get_orm(self, table_name: str):
+    def _get_model(self, table_name: str):
         """
-        Get the ORM class for the specified table name.
+        Get the Model class for the specified table name.
 
         #### Raises
         - TableNameValidationError: If the table name does not meet validation criteria.
@@ -44,7 +44,7 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
         """
 
         self._validate_table_exists(table_name)
-        return self.orm_factory._create_orm(table_name)
+        return self.model_factory._create_model(table_name)
 
     def stage_create_table_if_not_exists(self, table_name: str):
         """
@@ -58,7 +58,7 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
         self._validate_table_name(table_name)
         syntax = self._create_table_if_not_exists_clause(table_name)
         self.session.execute(syntax)
-        return self.orm_factory._create_orm(table_name)
+        return self.model_factory._create_model(table_name)
 
     def stage_drop_table_if_exists(self, table_name: str):
         """
@@ -96,17 +96,17 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
         - TableNotFoundError: If the table does not exist.
         """
 
-        Orm = self._get_orm(table_name)
+        Model = self._get_model(table_name)
 
-        stmt = select(Orm)
+        stmt = select(Model)
 
         if file_id:
-            stmt = stmt.where(Orm.file_id == file_id)
+            stmt = stmt.where(Model.file_id == file_id)
 
         if embedding_filter:
-            stmt = stmt.where(Orm.embedding != None)  # noqa: E711
+            stmt = stmt.where(Model.embedding != None)  # noqa: E711
         elif embedding_filter == False:  # noqa: E712
-            stmt = stmt.where(Orm.embedding == None)  # noqa: E711
+            stmt = stmt.where(Model.embedding == None)  # noqa: E711
 
         result = self.session.execute(stmt)
 
@@ -121,9 +121,9 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
         - TableNotFoundError: If the table does not exist.
         """
 
-        Orm = self._get_orm(table_name)
+        Model = self._get_model(table_name)
 
-        stmt = select(Orm).where(Orm.id == id)
+        stmt = select(Model).where(Model.id == id)
 
         result = self.session.execute(stmt)
 
@@ -145,9 +145,9 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
 
         self._validate_table_exists(table_name)
 
-        Orm = self._get_orm(table_name)
+        Model = self._get_model(table_name)
 
-        new_document = Orm(
+        new_document = Model(
             text=text,
             embedding=embedding,
             status=status,
@@ -169,12 +169,12 @@ class PgVectorRepositorySync(PgVectorRepositoryCore):
 
         self._validate_table_exists(table_name)
 
-        Orm = self._get_orm(table_name)
+        Model = self._get_model(table_name)
 
-        stmt = delete(Orm)
+        stmt = delete(Model)
 
         if file_id:
-            stmt = stmt.where(Orm.file_id == file_id)
+            stmt = stmt.where(Model.file_id == file_id)
 
         self.session.execute(stmt)
 

@@ -4,12 +4,12 @@ from typing import Optional
 from sqlalchemy import text
 
 from ..exception import TableNameValidationError
-from ..model.factory import PgVectorOrmFactory
+from ..model.factory import PgVectorModelFactory
 
 
 class PgVectorRepositoryCore:
     def __init__(self):
-        self.orm_factory = PgVectorOrmFactory()
+        self.model_factory = PgVectorModelFactory()
 
     """
     This class provides core functionalities and is not intended to be used directly.
@@ -40,7 +40,7 @@ class PgVectorRepositoryCore:
         return text(sql)
 
     def _create_table_if_not_exists_clause(self, table_name: str):
-        return text(self.orm_factory._create_table_if_not_exists_sql(table_name))
+        return text(self.model_factory._create_table_if_not_exists_sql(table_name))
 
     def _drop_table_if_exists_clause(self, table_name: str):
         sql = f"DROP TABLE IF EXISTS {table_name};"

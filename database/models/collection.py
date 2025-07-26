@@ -9,12 +9,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from schemas.embedding import EmbeddingModelMetadata
 
 if TYPE_CHECKING:
-    from .file import File
+    from .file import FileModel
 
 from .base import Base
 
 
-class Collection(Base):
+class CollectionModel(Base):
     """
     Represents a collection of files.
     Each collection can have multiple files associated with it.
@@ -65,7 +65,7 @@ class Collection(Base):
     )
 
     # Relationship to files
-    files: Mapped[list["File"]] = relationship(
+    files: Mapped[list["FileModel"]] = relationship(
         "File",
         back_populates="collection",
         cascade="all, delete-orphan",

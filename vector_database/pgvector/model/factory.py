@@ -27,16 +27,16 @@ class DocumentEmbeddingStatus(Enum):
         return "documentembeddingstatus"
 
 
-class PgVectorOrmFactory:
+class PgVectorModelFactory:
     def __init__(self):
         pass
 
-    def _create_orm(self, table_name: str):
+    def _create_model(self, table_name: str):
         """
         Create a new ORM class with the specified name.
         """
 
-        class DynamicOrm(Base):
+        class VectorModel(Base):
             __tablename__ = table_name
             __table_args__ = {"extend_existing": True}
             id: Mapped[str] = mapped_column(
@@ -74,7 +74,7 @@ class PgVectorOrmFactory:
                 comment="additional metadata for the document",
             )
 
-        return DynamicOrm
+        return VectorModel
 
     def _create_table_if_not_exists_sql(self, table_name: str):
         """
