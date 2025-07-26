@@ -95,7 +95,7 @@ class CollectionService:
         )
 
         return PaginatedResponse(
-            data=collections,
+            data=list(collections),
             total=total,
             page=pagination.offset // pagination.limit + 1,
             page_size=pagination.limit,
@@ -235,7 +235,7 @@ class CollectionService:
         )
 
         return PaginatedResponse(
-            data=files,
+            data=list(files),
             total=total,
             page=pagination.offset // pagination.limit + 1,
             page_size=pagination.limit,
