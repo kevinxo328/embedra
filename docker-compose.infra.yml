@@ -1,0 +1,53 @@
+# This is the Docker Compose file for the sample infrastructure services used by Embedra.
+# You can use this file to set up a local development environment and customize it as needed.
+# It includes services for PostgreSQL with pgvector, pgAdmin, Redis, and RedisInsight.
+# Ensure to set the required environment variables in a .env file or your environment.
+
+services:
+  postgre:
+    image: pgvector/pgvector:pg17
+    container_name: embedra_postgre
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: embedra_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgre
+
+  redis:
+    image: redis:alpine
+    container_name: embedra_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redisdata:/data
+
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: embedra_redisinsight
+    restart: always
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+
+volumes:
+  pgdata:
+  redisdata:
