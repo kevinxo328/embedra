@@ -72,7 +72,11 @@ class Settings(
     """
 
     class Config:
-        env_file = ".env"
+        env_file = (
+            ".env"
+            if os.getenv("ENV_POSTFIX") is None
+            else f".env.{os.getenv('ENV_POSTFIX')}"
+        )  # Use environment variable to determine the env file. For example, if ENV_POSTFIX=staging, then the env file will be .env.staging
         env_file_encoding = "utf-8"
         extra = "ignore"
 
