@@ -90,3 +90,4 @@ logger = initialize_logger(
 )
 
 logger.warning(f"Application environment: {env.APP_ENVIRONMENT}")
+logger.warning(f"Project root directory: {PROJECT_ROOT_DIR}")
