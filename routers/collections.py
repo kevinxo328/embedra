@@ -9,6 +9,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy.exc import NoResultFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -257,6 +258,67 @@ async def delete_files_in_collection(
         background_tasks.add_task(delete_local_file, path)
 
     return result
+
+
+@router.get("/{collection_id}/files/{file_id}/download", status_code=status.HTTP_200_OK)
+async def download_file_from_collection(
+    collection_id: str,
+    file_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Download a specific file from a collection.
+    """
+    try:
+        file = await CollectionService(session).get_collection_file_by_id(
+            collection_id=collection_id,
+            file_id=file_id,
+        )
+
+        return FileResponse(path=file.path, filename=file.filename)
+    except CollectionNotFoundException as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except NoResultFound:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File with ID {file_id} not found in collection {collection_id}",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
+@router.post(
+    "/{collection_id}/files/{file_id}/task/retry", status_code=status.HTTP_200_OK
+)
+async def retry_file_task(
+    collection_id: str,
+    file_id: str,
+    session: AsyncSession = Depends(get_db_session),
+):
+    """
+    Retry the embedding task for a specific file in a collection.
+    """
+    try:
+        return await CollectionService(session).retry_file_task(
+            collection_id=collection_id,
+            file_id=file_id,
+        )
+    except NoResultFound as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"File with ID {file_id} not found in collection {collection_id}",
+        )
+    except CollectionServiceException as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
 
 
 @router.get("/{collection_id}/cosine_similarity_search")

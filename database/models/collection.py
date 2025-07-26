@@ -66,7 +66,7 @@ class CollectionModel(Base):
 
     # Relationship to files
     files: Mapped[list["FileModel"]] = relationship(
-        "File",
+        "FileModel",
         back_populates="collection",
         cascade="all, delete-orphan",
         single_parent=True,
@@ -102,4 +102,4 @@ class CollectionModel(Base):
         return validated.model_dump()
 
     def __repr__(self) -> str:
-        return f"<Collection(id={self.id}, name={self.name}, description={self.description})>"
+        return f"<CollectionModel(id={self.id}, name={self.name}, description={self.description})>"

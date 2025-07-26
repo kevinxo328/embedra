@@ -1,0 +1,41 @@
+services:
+  celery-tasks:
+    build:
+      context: .
+      dockerfile: Dockerfile.celery
+    restart: always
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - APP_ENVIRONMENT=${APP_ENVIRONMENT}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - CELERY_FASTAPI_HOST=${CELERY_FASTAPI_HOST}
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - APP_ENVIRONMENT=${APP_ENVIRONMENT}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND}
+      - CELERY_FASTAPI_HOST=${CELERY_FASTAPI_HOST}
+    ports:
+      - "8000:8000"
+    depends_on:
+      - celery-tasks
+    volumes:
+      - app-data:/app/docs
+      - app-logs:/app/logs
+
+volumes:
+  app-data:
+  app-logs:

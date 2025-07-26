@@ -34,6 +34,7 @@ class CelerySettings(BaseSettings):
 
     CELERY_BROKER_URL: str
     CELERY_RESULT_BACKEND: str
+    CELERY_FASTAPI_HOST: str
 
     @field_validator("CELERY_BROKER_URL", mode="before")
     @classmethod
@@ -72,14 +73,16 @@ class Settings(
     """
 
     class Config:
-        env_file = ".env"
+        env_file = (
+            ".env"
+            if os.getenv("ENV_POSTFIX") is None
+            else f".env.{os.getenv('ENV_POSTFIX')}"
+        )  # Use environment variable to determine the env file. For example, if ENV_POSTFIX=staging, then the env file will be .env.staging
         env_file_encoding = "utf-8"
-        extra = "allow"
+        extra = "ignore"
 
 
 env = Settings()  # pyright: ignore[reportCallIssue]
-
-PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
 # Initialize request context for logging
@@ -88,3 +91,8 @@ logger = initialize_logger(
     context=request_context,
     level="INFO" if env.APP_ENVIRONMENT != "production" else "WARNING",
 )
+# Set up project root directory.
+PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+logger.warning(f"Application environment: {env.APP_ENVIRONMENT}")
+logger.warning(f"Project root directory: {PROJECT_ROOT_DIR}")

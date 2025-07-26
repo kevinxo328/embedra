@@ -6,6 +6,12 @@ from fastapi import UploadFile
 from schemas.file import ValidatedUploadFile
 from settings import PROJECT_ROOT_DIR
 
+SUPPORTED_FILE_EXTENSIONS = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+
 
 def validate_upload_file(file: UploadFile):
     """
@@ -21,6 +27,11 @@ def validate_upload_file(file: UploadFile):
 
     if not file.content_type:
         raise ValueError("Uploaded file must have a content type.")
+
+    if file.content_type not in SUPPORTED_FILE_EXTENSIONS.values():
+        raise ValueError(
+            f"Unsupported file type: {file.content_type}. Supported types are: {', '.join(SUPPORTED_FILE_EXTENSIONS.values())}"
+        )
 
     return cast(ValidatedUploadFile, file)
 

@@ -3,7 +3,7 @@ from typing import Optional
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from celery_tasks import process_file
+from celery_tasks import embed_documents, process_file
 from database.models.collection import CollectionModel
 from database.models.file import FileModel
 from domains.collection import SelectFilter as CollectionSelectFilter
@@ -18,7 +18,12 @@ from schemas.collection import (
     CollectionUpdate,
 )
 from schemas.common import DeleteResponse, PaginatedResponse
-from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
+from schemas.file import (
+    FileFilter,
+    FilePaginationParams,
+    FileStatus,
+    ValidatedUploadFile,
+)
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
@@ -241,6 +246,22 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
+    async def get_collection_file_by_id(self, collection_id: str, file_id: str):
+        """
+        Retrieve a specific file from a collection by its ID.
+
+        ### Raises:
+        - CollectionNotFoundException: If the collection with the specified ID does not exist.
+        - NoResultFound: If the file with the specified ID does not exist in the collection.
+        """
+        await self.__validate_collection_exists(collection_id)
+
+        file = await self.file_repository.select_one(
+            FileSelectFilter(id=file_id, collection_id=collection_id)
+        )
+
+        return file
+
     async def upload_file_to_collection(
         self, collection_id: str, file: ValidatedUploadFile
     ):
@@ -278,6 +299,43 @@ class CollectionService:
         # Refresh the new file to apply ORM mappings
         await self.session.refresh(new_file)
         return new_file
+
+    async def retry_file_task(self, collection_id: str, file_id: str):
+        """
+        Retry processing a file in a specific collection.
+
+        ### Args:
+        - collection_id (str): The ID of the collection.
+        - file_id (str): The ID of the file to retry processing.
+
+        ### Raises:
+        - NotFoundException: If the collection with the specified ID does not exist.
+        """
+        file = await self.file_repository.select_one(
+            FileSelectFilter(id=file_id, collection_id=collection_id)
+        )
+
+        table_name = self.__create_vector_table_name(collection_id)
+
+        if file.status == FileStatus.CHUNK_FAILED or file.status == FileStatus.FAILED:
+            # Retry whole file processing
+            process_file.apply_async(
+                kwargs={"file_id": file.id, "table_name": table_name}
+            )
+
+        elif file.status == FileStatus.EMBEDDING_PARTIAL_FAILED:
+            # Retry embedding the documents
+            embed_documents.apply_async(
+                kwargs={"file_id": file.id, "table_name": table_name}
+            )
+        else:
+            raise CollectionServiceException(
+                f"File {file_id} is not in a retryable state. "
+                f"Current status: {file.status.value}. "
+                f"Only files with status {FileStatus.CHUNK_FAILED.value}, {FileStatus.FAILED.value}, or {FileStatus.EMBEDDING_PARTIAL_FAILED.value} can be retried."
+            )
+
+        return True
 
     # TODO: Need to check if any files are processing in celery before deleting the collection.
     async def delete_collection_files(
