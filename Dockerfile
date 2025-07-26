@@ -1,7 +1,14 @@
 # FastAPI Dockerfile
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
-WORKDIR /app
+# Prevent Python from writing .pyc files and ensure output is flushed
+ENV PYTHONDONTWRITEBYTECODE=1
+# Ensure Python output is sent straight to terminal (e.g. for logging)
+ENV PYTHONUNBUFFERED=1
+# Prevent pip from caching
+ENV PIP_NO_CACHE_DIR=1
+# Disable pip version check to speed up builds
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Install dependencies
 COPY pyproject.toml poetry.lock ./
@@ -9,11 +16,35 @@ RUN pip install --no-cache-dir poetry && \
     poetry config virtualenvs.create false && \
     poetry install --only main --no-interaction --no-ansi --no-root
 
+FROM python:3.11-slim AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PATH="/usr/local/bin:$PATH"
+
+# Create a non-root user for security
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+WORKDIR /app
+
+# Copy installed dependencies from builder stage
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+
 # Copy source code
-COPY . .
+COPY --chown=appuser:appuser . .
+
+# Set permissions for application directories
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
+RUN mkdir -p /app/docs && chown -R appuser:appuser /app/docs
+
+# TODO: Currently running as root for simplicity, because of issues with log files and save docs permissions.
+# Switch to non-root user
+# USER appuser
 
 # Expose FastAPI port
 EXPOSE 8000
 
 # Start FastAPI app using uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
