@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal, Optional
 
 from fastapi import Depends, Query, UploadFile
 from pydantic import BaseModel, ConfigDict
@@ -64,8 +64,8 @@ class ValidatedUploadFile(UploadFile):
 
 
 class FileFilter(BaseModel):
-    filename: Union[str, None] = None
-    content_type: Union[str, None] = None
+    filename: Optional[str] = None
+    content_type: Optional[str] = None
 
 
 class FilePaginationParams:

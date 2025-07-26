@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union
+from typing import Optional
 
 from langchain_core.embeddings.embeddings import Embeddings
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -24,7 +24,7 @@ class EmbeddingModelProvider(Enum):
 def get_embedding_model_by_provider_name(
     provider_name: str,
     model_name: str,
-    metadata: Union[EmbeddingModelMetadata, None] = None,
+    metadata: Optional[EmbeddingModelMetadata] = None,
 ) -> Embeddings:
     """
     Get the embedding model provider by its name.

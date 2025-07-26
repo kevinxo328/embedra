@@ -1,4 +1,4 @@
-from typing import Annotated, Generic, Literal, TypeVar, Union
+from typing import Annotated, Generic, Literal, Optional, TypeVar
 
 from fastapi import Query
 from pydantic import BaseModel
@@ -6,11 +6,11 @@ from pydantic import BaseModel
 
 class MarkdownResponse(BaseModel):
     markdown: str
-    title: Union[str, None] = None
+    title: Optional[str] = None
 
 
 class DeleteRequest(BaseModel):
-    ids: Union[list[str], None] = None
+    ids: Optional[list[str]] = None
     all: bool = False
 
 

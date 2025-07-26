@@ -1,5 +1,5 @@
 import inspect
-from typing import Union
+from typing import Optional
 
 from fastapi import (
     APIRouter,
@@ -264,7 +264,7 @@ async def cosine_similarity_search(
     collection_id: str,
     query: str,
     k: int = 5,
-    threshold: Union[float, None] = None,
+    threshold: Optional[float] = None,
     session: AsyncSession = Depends(get_db_session),
 ):
     """

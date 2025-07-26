@@ -3,7 +3,7 @@ import logging
 import logging.handlers
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Literal, Union
+from typing import Literal, Optional, Union
 
 import colorlog
 
@@ -79,7 +79,7 @@ DATE_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 
 def initialize_logger(
     context: RequestContext,
-    name: Union[str, None] = None,
+    name: Optional[str] = None,
     level: Union[str, int] = "INFO",
 ) -> logging.Logger:
 
