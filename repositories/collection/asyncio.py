@@ -13,7 +13,7 @@ class CollectionRepositoryAsync(CollectionRepositoryCore):
         super().__init__()
         self.session = session
 
-    async def get(
+    async def select_with_pagination(
         self,
         name: Optional[str] = None,
         embedding_model: Optional[str] = None,
