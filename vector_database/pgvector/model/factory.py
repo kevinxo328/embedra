@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Union
+from typing import Optional
 from uuid import uuid4
 
 from pgvector.sqlalchemy import Vector
@@ -67,7 +67,7 @@ class PgVectorModelFactory:
                 nullable=False,
                 comment="ID of the file associated with the document",
             )
-            meta: Mapped[Union[dict, None]] = mapped_column(
+            meta: Mapped[Optional[dict]] = mapped_column(
                 "metadata",
                 JSONB,
                 nullable=True,

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Literal, Optional, Union
+from typing import Annotated, Literal, Optional
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, ConfigDict
@@ -10,7 +10,7 @@ from schemas.embedding import EmbeddingModel
 
 class CollectionUpdate(BaseModel):
     name: str
-    description: Union[str, None] = None
+    description: Optional[str] = None
 
 
 class CollectionCreate(CollectionUpdate, EmbeddingModel):
@@ -28,8 +28,8 @@ class Collection(CollectionCreate):
 
 
 class CollectionFilter(BaseModel):
-    name: Union[str, None] = None
-    embedding_model: Union[str, None] = None
+    name: Optional[str] = None
+    embedding_model: Optional[str] = None
 
 
 class CollectionPaginationParams:

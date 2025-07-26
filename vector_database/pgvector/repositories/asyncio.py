@@ -1,4 +1,4 @@
-from typing import Optional, Union
+from typing import Optional
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,7 +78,7 @@ class PgVectorRepositoryAsync(PgVectorRepositoryCore):
         self,
         table_name: str,
         file_id: Optional[str] = None,
-        embedding_filter: Union[bool, None] = None,
+        embedding_filter: Optional[bool] = None,
     ):
         """
         Retrieve documents from the specified vector table.

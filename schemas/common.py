@@ -1,17 +1,16 @@
-from typing import Annotated, Generic, Literal, Optional, TypeVar, Union
+from typing import Annotated, Generic, Literal, Optional, TypeVar
 
 from fastapi import Query
 from pydantic import BaseModel
-from pydantic.generics import GenericModel
 
 
 class MarkdownResponse(BaseModel):
     markdown: str
-    title: Union[str, None] = None
+    title: Optional[str] = None
 
 
 class DeleteRequest(BaseModel):
-    ids: Union[list[str], None] = None
+    ids: Optional[list[str]] = None
     all: bool = False
 
 
@@ -21,11 +20,11 @@ class DeleteResponse(BaseModel):
     failed_messages: list[str] = []
 
 
-T = TypeVar("T")
+DataType = TypeVar("DataType")
 
 
-class PaginatedResponse(GenericModel, Generic[T]):
-    data: list[T]
+class PaginatedResponse(BaseModel, Generic[DataType]):
+    data: list[DataType]
     total: int
     page: int
     page_size: int

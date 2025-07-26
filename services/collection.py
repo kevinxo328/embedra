@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Optional
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -95,7 +95,7 @@ class CollectionService:
         )
 
         return PaginatedResponse(
-            data=collections,
+            data=list(collections),
             total=total,
             page=pagination.offset // pagination.limit + 1,
             page_size=pagination.limit,
@@ -235,7 +235,7 @@ class CollectionService:
         )
 
         return PaginatedResponse(
-            data=files,
+            data=list(files),
             total=total,
             page=pagination.offset // pagination.limit + 1,
             page_size=pagination.limit,
@@ -281,7 +281,7 @@ class CollectionService:
 
     # TODO: Need to check if any files are processing in celery before deleting the collection.
     async def delete_collection_files(
-        self, collection_id: str, file_ids: Union[list[str], None], all: bool
+        self, collection_id: str, file_ids: Optional[list[str]], all: bool
     ):
         """
         Delete specific files in a specific collection.
@@ -375,7 +375,7 @@ class CollectionService:
         collection_id: str,
         query: str,
         top_k: int = 5,
-        threshold: Union[float, None] = None,
+        threshold: Optional[float] = None,
     ):
         """
         Perform a similarity search in the specified collection.

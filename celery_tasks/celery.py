@@ -2,14 +2,14 @@ from celery import Celery
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from settings import CELERY_BROKER_URL, CELERY_RESULT_BACKEND, DATABASE_URL
+from settings import env
 
 app = Celery(
     "tasks",
-    broker=CELERY_BROKER_URL,
-    backend=CELERY_RESULT_BACKEND,
+    broker=env.CELERY_BROKER_URL,
+    backend=env.CELERY_RESULT_BACKEND,
 )
-engine = create_engine(DATABASE_URL)
+engine = create_engine(env.DATABASE_URL)
 Session = sessionmaker(bind=engine)
 
 # echo enables verbose logging from SQLAlchemy.
