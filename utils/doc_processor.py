@@ -19,29 +19,37 @@ Future Enhancements (to be discussed):
 - Support for complex document layouts and formatting
 """
 
+from pathlib import Path
+from typing import BinaryIO, Optional, Union
+
+import requests
 from langchain.text_splitter import MarkdownTextSplitter
 from markitdown import MarkItDown
+
+from settings import env
 
 # Initialize MarkItDown converter with plugins disabled for simplicity
 # TODO: Consider enabling plugins for enhanced document processing capabilities
 md = MarkItDown(enable_plugins=False)
 
 
-def markitdown_converter(**kwargs):
+def markitdown_converter(
+    source: Union[str, BinaryIO, requests.Response, Path],
+    verify: Optional[bool] = None,
+    **kwargs,
+):
     """
     Convert various document formats to Markdown using MarkItDown.
 
     This is a simple wrapper around MarkItDown's convert method that handles
     multiple document formats including PDF, DOCX, PPTX, etc.
 
-    Args:
-        **kwargs: Arguments passed to MarkItDown.convert()
-                 Common arguments include:
-                 - source: file path or file-like object
-                 - file_extension: explicit file extension override
-
-    Returns:
-        ConversionResult: MarkItDown conversion result containing text content
+    #### Args:
+    - source (Union[str, BinaryIO, requests.Response, Path]): The source file to convert.
+    - verify (Optional[bool]): Whether to verify SSL certificates when fetching remote files.
+      Defaults to None, which uses the `APP_ENVIRONMENT` setting from the environment.
+      If `APP_ENVIRONMENT` is "production", SSL verification is enabled.
+    - **kwargs: Additional keyword arguments passed to MarkItDown's convert method.
 
     Note:
         This is a basic implementation. Future versions may include:
@@ -49,7 +57,16 @@ def markitdown_converter(**kwargs):
         - Custom handling for images and tables
         - Metadata preservation from source documents
     """
-    return md.convert(**kwargs)
+
+    # Determine SSL verification based on environment settings
+    if verify == False or (env.APP_ENVIRONMENT != "production" and verify is None):
+        if isinstance(source, str) and (
+            source.startswith("http") or source.startswith("https")
+        ):
+
+            source = requests.get(source, verify=False)
+
+    return md.convert(source, **kwargs)
 
 
 def split_markdown(

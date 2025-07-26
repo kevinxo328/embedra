@@ -20,6 +20,7 @@ langchain-openai = "^0.3.28"
 celery = {extras = ["redis"], version = "^5.5.3"}
 pydantic-settings = "^2.10.1"
 markitdown = {extras = ["docx", "pdf", "pptx"], version = "^0.1.2"}
+requests = "^2.32.4"
 
 
 [build-system]
