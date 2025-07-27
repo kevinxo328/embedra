@@ -3,6 +3,14 @@
     "context7": {
       "type": "streamable-http",
       "url": "https://mcp.context7.com/mcp"
+    },
+    "10x-rules": {
+      "type": "sse",
+      "url": "https://10x-rules-mcp-server.przeprogramowani.workers.dev/sse",
+      "alwaysAllow": [
+        "listAvailableRules",
+        "getRuleContent"
+      ]
     }
   }
 }
