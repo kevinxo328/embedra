@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from database.db import init_db
 from env import env
 from middleware.logging_middleware import LoggingMiddleware
-from routers import collections, embeddings
+from routers import collections, embeddings, files
 from settings import logger, request_context
 from vector_database.pgvector.db import init_db as init_pgvector_db
 
@@ -34,6 +34,7 @@ app.add_middleware(LoggingMiddleware, context=request_context, logger=logger)
 
 app.include_router(collections.router, prefix="/api")
 app.include_router(embeddings.router, prefix="/api")
+app.include_router(files.router, prefix="/api")
 
 # Include utils router only in non-production environment
 if env.APP_ENVIRONMENT != "production":
