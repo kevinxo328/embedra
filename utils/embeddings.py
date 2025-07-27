@@ -6,8 +6,8 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_openai import AzureOpenAIEmbeddings, OpenAIEmbeddings
 from pydantic import SecretStr
 
+from env import env
 from schemas.embedding import EmbeddingModelMetadata
-from settings import env
 
 
 class EmbeddingModelProvider(Enum):

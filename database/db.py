@@ -1,7 +1,8 @@
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from database.models.base import Base
-from settings import env, logger
+from env import env
+from settings import logger
 
 
 async def init_db():

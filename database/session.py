@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from settings import env
+from env import env
 
 engine = create_async_engine(env.DATABASE_URL, echo=True)
 factory = async_sessionmaker(engine)
