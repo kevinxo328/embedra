@@ -35,13 +35,13 @@ class FileService:
 
         vector_table_name = self.__create_vector_table_name(file.collection_id)
 
-        if file.status == FileStatus.CHUNK_FAILED or file.status == FileStatus.FAILED:
+        if file.status == FileStatus.CHUNK_FAILED:
             # Retry whole file processing
             process_file.apply_async(
                 kwargs={"file_id": file.id, "table_name": vector_table_name}
             )
 
-        elif file.status == FileStatus.EMBEDDING_PARTIAL_FAILED:
+        elif file.status == FileStatus.FAILED:
             # Retry embedding the documents
             embed_documents.apply_async(
                 kwargs={"file_id": file.id, "table_name": vector_table_name}
@@ -53,7 +53,6 @@ class FileService:
                 retryable_statuses=[
                     FileStatus.CHUNK_FAILED.value,
                     FileStatus.FAILED.value,
-                    FileStatus.EMBEDDING_PARTIAL_FAILED.value,
                 ],
             )
 
