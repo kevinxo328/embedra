@@ -57,7 +57,7 @@ class CollectionService:
             )
         return collection
 
-    async def select_collections_with_pagination(
+    async def get_collections(
         self, filter: CollectionFilter, pagination: CollectionPaginationParams
     ):
         """
@@ -94,7 +94,7 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    async def select_collection_one_or_none(self, id: str):
+    async def get_collection(self, id: str):
         return await self.collection_repository.select_one_or_none(
             CollectionSelectFilter(id=id)
         )
@@ -191,7 +191,7 @@ class CollectionService:
 
         return file_paths
 
-    async def select_collection_files(
+    async def get_collection_files(
         self, collection_id: str, filter: FileFilter, pagination: FilePaginationParams
     ):
         """

@@ -9,7 +9,6 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import schemas.collection
@@ -31,14 +30,14 @@ router = APIRouter(
     "/",
     status_code=status.HTTP_200_OK,
     response_model=schemas.common.PaginatedResponse[schemas.collection.Collection],
-    description=inspect.getdoc(CollectionService.select_collections_with_pagination),
+    description=inspect.getdoc(CollectionService.get_collections),
 )
-async def select_collections(
+async def get_collections(
     filter: schemas.collection.CollectionFilter = Depends(),
     pagination: schemas.collection.CollectionPaginationParams = Depends(),
     session: AsyncSession = Depends(get_db_session),
 ):
-    return await CollectionService(session).select_collections_with_pagination(
+    return await CollectionService(session).get_collections(
         filter=filter, pagination=pagination
     )
 
@@ -48,16 +47,14 @@ async def select_collections(
     status_code=status.HTTP_200_OK,
     response_model=schemas.collection.Collection,
 )
-async def select_collection(
+async def get_collection(
     collection_id: str,
     session: AsyncSession = Depends(get_db_session),
 ):
     """
     Retrieve a specific collection by optional filters.
     """
-    collection = await CollectionService(session).select_collection_one_or_none(
-        collection_id
-    )
+    collection = await CollectionService(session).get_collection(collection_id)
 
     if not collection:
         raise HTTPException(
@@ -135,7 +132,7 @@ async def delete_collection(
     status_code=status.HTTP_200_OK,
     response_model=schemas.common.PaginatedResponse[schemas.file.File],
 )
-async def select_collection_files(
+async def get_collection_files(
     collection_id: str,
     filter: schemas.file.FileFilter = Depends(),
     pagination: schemas.file.FilePaginationParams = Depends(),
@@ -144,7 +141,7 @@ async def select_collection_files(
     """
     Retrieve files associated with a specific collection.
     """
-    return await CollectionService(session).select_collection_files(
+    return await CollectionService(session).get_collection_files(
         collection_id, filter, pagination
     )
 
@@ -212,23 +209,6 @@ async def delete_collection_files(
         background_tasks.add_task(delete_local_file, path)
 
     return result
-
-
-@router.post(
-    "/{collection_id}/files/{file_id}/task/retry", status_code=status.HTTP_200_OK
-)
-async def retry_file_task(
-    collection_id: str,
-    file_id: str,
-    session: AsyncSession = Depends(get_db_session),
-):
-    """
-    Retry the embedding task for a specific file in a collection.
-    """
-    return await CollectionService(session).retry_file_task(
-        collection_id=collection_id,
-        file_id=file_id,
-    )
 
 
 @router.get("/{collection_id}/cosine_similarity_search")
