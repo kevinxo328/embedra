@@ -214,23 +214,6 @@ async def delete_collection_files(
     return result
 
 
-@router.get("/{collection_id}/files/{file_id}/download", status_code=status.HTTP_200_OK)
-async def download_collection_file(
-    collection_id: str,
-    file_id: str,
-    session: AsyncSession = Depends(get_db_session),
-):
-    """
-    Download a specific file from a collection.
-    """
-    file = await CollectionService(session).get_collection_file(
-        collection_id=collection_id,
-        file_id=file_id,
-    )
-
-    return FileResponse(path=file.path, filename=file.filename)
-
-
 @router.post(
     "/{collection_id}/files/{file_id}/task/retry", status_code=status.HTTP_200_OK
 )

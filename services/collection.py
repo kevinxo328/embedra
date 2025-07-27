@@ -3,13 +3,13 @@ from typing import Optional
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from celery_tasks import embed_documents, process_file
+from celery_tasks import process_file
 from database.models.collection import CollectionModel
 from database.models.file import FileModel
 from domains.collection import SelectFilter as CollectionSelectFilter
 from domains.file import OffsetBasedPagination as FileOffsetPagination
 from domains.file import SelectFilter as FileSelectFilter
-from exceptions.common import FileStatusNotRetryableError, ResourceNotFoundError
+from exceptions.common import ResourceNotFoundError
 from repositories.collection.asyncio import CollectionRepositoryAsync
 from repositories.file.asyncio import FileRepositoryAsync
 from schemas.collection import (
@@ -19,12 +19,7 @@ from schemas.collection import (
     CollectionUpdate,
 )
 from schemas.common import DeleteResponse, PaginatedResponse
-from schemas.file import (
-    FileFilter,
-    FilePaginationParams,
-    FileStatus,
-    ValidatedUploadFile,
-)
+from schemas.file import FileFilter, FilePaginationParams, ValidatedUploadFile
 from utils.embeddings import (
     EmbeddingModelProvider,
     get_embedding_model_by_provider_name,
@@ -239,24 +234,6 @@ class CollectionService:
             page_size=pagination.limit,
         )
 
-    async def get_collection_file(self, collection_id: str, file_id: str):
-        """
-        Retrieve a specific file from a collection by filter.
-
-        ### Raises:
-        - ResourceNotFoundError: If the collection of file with the specified ID does not exist.
-        """
-        await self.__validate_collection_exists(collection_id)
-
-        file = await self.file_repository.select_one_or_none(
-            FileSelectFilter(id=file_id, collection_id=collection_id)
-        )
-
-        if not file:
-            raise ResourceNotFoundError(resource_name="File", resource_id=file_id)
-
-        return file
-
     async def upload_collection_file(
         self, collection_id: str, file: ValidatedUploadFile
     ):
@@ -294,49 +271,6 @@ class CollectionService:
         # Refresh the new file to apply ORM mappings
         await self.session.refresh(new_file)
         return new_file
-
-    async def retry_file_task(self, collection_id: str, file_id: str):
-        """
-        Retry processing a file in a specific collection.
-
-        ### Args:
-        - collection_id (str): The ID of the collection.
-        - file_id (str): The ID of the file to retry processing.
-
-        ### Raises:
-        - ResourceNotFoundError: If the collection or file with the specified ID does not exist.
-        - FileStatusNotRetryableError: If the file status is not retryable.
-        """
-        file = await self.get_collection_file(
-            collection_id=collection_id,
-            file_id=file_id,
-        )
-
-        table_name = self.__create_vector_table_name(collection_id)
-
-        if file.status == FileStatus.CHUNK_FAILED or file.status == FileStatus.FAILED:
-            # Retry whole file processing
-            process_file.apply_async(
-                kwargs={"file_id": file.id, "table_name": table_name}
-            )
-
-        elif file.status == FileStatus.EMBEDDING_PARTIAL_FAILED:
-            # Retry embedding the documents
-            embed_documents.apply_async(
-                kwargs={"file_id": file.id, "table_name": table_name}
-            )
-        else:
-            raise FileStatusNotRetryableError(
-                file_id=file.id,
-                status=file.status.value,
-                retryable_statuses=[
-                    FileStatus.CHUNK_FAILED.value,
-                    FileStatus.FAILED.value,
-                    FileStatus.EMBEDDING_PARTIAL_FAILED.value,
-                ],
-            )
-
-        return True
 
     # TODO: Need to check if any files are processing in celery before deleting the collection.
     async def delete_collection_files(
