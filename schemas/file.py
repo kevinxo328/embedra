@@ -23,16 +23,14 @@ class FileStatus(Enum):
     - CHUNKED: The file has been successfully chunked.
     - CHUNK_FAILED: The file chunking failed.
     - EMBEDDING: The file is currently being embedded.
-    - EMBEDDING_PARTIAL_FAILED: Some chunks of the file failed to embed.
     - SUCCESS: The file processing was successful.
-    - FAILED: The file processing failed for an unspecified reason.
+    - FAILED: Some or all chunks of the file failed to embed.
     """
 
     UPLOADED = "uploaded"
     CHUNKED = "chunked"
     CHUNK_FAILED = "chunk_failed"
     EMBEDDING = "embedding"
-    EMBEDDING_PARTIAL_FAILED = "embedding_partial_failed"
     SUCCESS = "success"
     FAILED = "failed"
 

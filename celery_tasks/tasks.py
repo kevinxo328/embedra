@@ -30,8 +30,8 @@ def check_file_status(file_id: str, table_name: str):
 
         if all(doc.status == DocumentEmbeddingStatus.SUCCESS for doc in docs):
             new_status = FileStatus.SUCCESS
-        elif any(doc.status == DocumentEmbeddingStatus.FAILED for doc in docs):
-            new_status = FileStatus.EMBEDDING_PARTIAL_FAILED
+        elif all(doc.status == DocumentEmbeddingStatus.FAILED for doc in docs):
+            new_status = FileStatus.FAILED
 
         if file.status != new_status:
             file.status = new_status
@@ -84,9 +84,15 @@ def embed_documents(file_id: str, table_name: str):
         docs = PgVectorRepositorySync(session).get_documents(
             table_name=table_name, embedding_filter=False, file_id=file_id
         )
+        file = FileRepositorySync(session).select_one(FileSelectFilter(id=file_id))
 
-    for doc in docs:
-        embed_document.apply_async(kwargs={"table_name": table_name, "doc_id": doc.id})
+        for doc in docs:
+            embed_document.apply_async(
+                kwargs={"table_name": table_name, "doc_id": doc.id}
+            )
+
+        file.status = FileStatus.EMBEDDING
+        session.commit()
 
 
 @app.task(name="tasks.extract_file")
@@ -105,6 +111,11 @@ def extract_file(file_id: str, table_name: str):
             result = markitdown_converter(source=source)
             docs = split_markdown(result.markdown)
             vector_repository = PgVectorRepositorySync(session)
+
+            if docs is None or len(docs) == 0:
+                file.status = FileStatus.CHUNK_FAILED
+                session.commit()
+                raise ValueError("No documents extracted from the file.")
 
             for doc in docs:
                 vector_repository.stage_add_document(
