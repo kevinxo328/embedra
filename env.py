@@ -24,7 +24,9 @@ class LLMSettings(BaseSettings):
 
 class AppEnvSettings(BaseSettings):
 
-    APP_ENVIRONMENT: Literal["development", "staging", "production"] = "development"
+    APP_ENVIRONMENT: Literal["local", "development", "staging", "production"] = (
+        "development"
+    )
 
 
 class CelerySettings(BaseSettings):
