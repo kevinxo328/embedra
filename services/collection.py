@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from celery_tasks import process_file
 from database.models.collection import CollectionModel
 from database.models.file import FileModel
+from domains.collection import OffsetBasedPagination as CollectionOffsetPagination
 from domains.collection import SelectFilter as CollectionSelectFilter
 from domains.file import OffsetBasedPagination as FileOffsetPagination
 from domains.file import SelectFilter as FileSelectFilter
@@ -78,13 +79,20 @@ class CollectionService:
         - page_size: Number of items per page.
         """
 
-        collections, total = await self.collection_repository.select_with_pagination(
+        fitter = CollectionSelectFilter(
             name=filter.name,
             embedding_model=filter.embedding_model,
+        )
+
+        offset_pagination = CollectionOffsetPagination(
             limit=pagination.limit,
             offset=pagination.offset,
             sort_by=pagination.sort_by,
             sort_order=pagination.sort_order,
+        )
+
+        collections, total = await self.collection_repository.select_with_pagination(
+            fitter=fitter, pagination=offset_pagination
         )
 
         return PaginatedResponse(

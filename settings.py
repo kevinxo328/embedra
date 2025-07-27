@@ -9,6 +9,7 @@ request_context = RequestContext()
 logger = initialize_logger(
     context=request_context,
     level="INFO" if env.APP_ENVIRONMENT != "production" else "WARNING",
+    enable_file_logging=env.APP_ENVIRONMENT == "local",
 )
 # Set up project root directory.
 PROJECT_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))

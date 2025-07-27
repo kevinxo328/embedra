@@ -81,6 +81,7 @@ def initialize_logger(
     context: RequestContext,
     name: Optional[str] = None,
     level: Union[str, int] = "INFO",
+    enable_file_logging: bool = True,
 ) -> logging.Logger:
 
     logger = logging.getLogger(name)
@@ -96,20 +97,21 @@ def initialize_logger(
     stream_handler.setFormatter(stream_formatter)
     logger.addHandler(stream_handler)
 
-    # Time Rotating File Handler for file output, with JSON formatting
-    log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
-    os.makedirs(log_dir, exist_ok=True)  # Create log directory if it doesn't exist
-    log_file = os.path.join(log_dir, "app.log")
-    file_handler = logging.handlers.TimedRotatingFileHandler(
-        log_file,
-        when="midnight",
-        interval=1,
-        backupCount=30,
-        encoding="utf-8",
-        utc=True,
-    )
-    file_handler.setFormatter(JSONFormatter(datefmt=DATE_FORMAT))
-    logger.addHandler(file_handler)
+    if enable_file_logging:
+        # Time Rotating File Handler for file output, with JSON formatting
+        log_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
+        os.makedirs(log_dir, exist_ok=True)  # Create log directory if it doesn't exist
+        log_file = os.path.join(log_dir, "app.log")
+        file_handler = logging.handlers.TimedRotatingFileHandler(
+            log_file,
+            when="midnight",
+            interval=1,
+            backupCount=30,
+            encoding="utf-8",
+            utc=True,
+        )
+        file_handler.setFormatter(JSONFormatter(datefmt=DATE_FORMAT))
+        logger.addHandler(file_handler)
 
     # Set the log record factory to include request ID and sequence number
     # This allows us to access these attributes in the log records

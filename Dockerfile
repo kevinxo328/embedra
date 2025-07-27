@@ -36,7 +36,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 COPY --chown=appuser:appuser . .
 
 # Set permissions for application directories
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app/logs
 RUN mkdir -p /app/docs && chown -R appuser:appuser /app/docs
 
 # TODO: Currently running as root for simplicity, because of issues with log files and save docs permissions.
